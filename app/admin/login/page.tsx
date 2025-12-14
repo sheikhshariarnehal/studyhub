@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2, Eye, EyeOff, Shield, Lock, Mail, ArrowRight } from "lucide-react"
-import { useAuth } from "@/contexts/auth-context"
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("")
@@ -14,7 +13,6 @@ export default function AdminLoginPage() {
   const [mounted, setMounted] = useState(false)
 
   const router = useRouter()
-  const { user, login: authLogin } = useAuth()
 
   // Animation on mount
   useEffect(() => {
@@ -23,11 +21,25 @@ export default function AdminLoginPage() {
 
   // Check if already logged in
   useEffect(() => {
-    if (user) {
-      // Already authenticated, redirect to admin
-      router.replace("/admin")
+    const checkAuth = async () => {
+      try {
+        const response = await fetch("/api/auth/me", {
+          method: "GET",
+          credentials: "include",
+          cache: 'no-store',
+        })
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success) {
+            router.replace("/admin")
+          }
+        }
+      } catch (error) {
+        // User not logged in, stay on login page
+      }
     }
-  }, [user, router])
+    checkAuth()
+  }, [router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,14 +53,25 @@ export default function AdminLoginPage() {
     }
 
     try {
-      // Use the auth context login function
-      const result = await authLogin(email, password)
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
+      })
 
-      if (result.success) {
-        // Auth context has set the user, now redirect
-        router.replace("/admin")
+      const data = await response.json()
+
+      if (data.success) {
+        // Wait a bit for cookie to be set
+        await new Promise(resolve => setTimeout(resolve, 200))
+        
+        // Force a full page reload to ensure cookie is read
+        window.location.href = "/admin"
       } else {
-        setError(result.error || "Login failed")
+        setError(data.error || "Login failed")
       }
     } catch (error) {
       console.error("Login error:", error)
