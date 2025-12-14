@@ -1,7 +1,7 @@
 "use client"
 
 import { Header } from "@/components/header"
-import { ExternalLink, Github, Linkedin, Mail, Globe } from "lucide-react"
+import { ExternalLink, Github, Linkedin, Mail, Globe, Facebook } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 export default function ContributorPage() {
@@ -184,6 +184,15 @@ export default function ContributorPage() {
                     >
                       <Linkedin className="h-4 w-4" />
                       LinkedIn
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => window.open('https://www.facebook.com/tanvir.mahmud.alamin1', '_blank')}
+                    >
+                      <Facebook className="h-4 w-4" />
+                      Facebook
                     </Button>
 
                     <Button
