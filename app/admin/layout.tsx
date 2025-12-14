@@ -4,6 +4,7 @@
 export const dynamic = 'force-dynamic'
 
 import React, { useEffect, useState } from "react"
+import { usePathname } from "next/navigation"
 import { AdminSidebar } from "@/components/admin/admin-sidebar"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -14,8 +15,14 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 
 function AdminLayoutContent({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
   const { user, loading } = useAuth()
   const [showTimeout, setShowTimeout] = useState(false)
+
+  // If on login page, just render children without auth check
+  if (pathname === "/admin/login") {
+    return <>{children}</>
+  }
 
   useEffect(() => {
     // Show timeout message if loading takes too long
