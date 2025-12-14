@@ -14,15 +14,17 @@ export default function ContributorPage() {
           {/* Header Section */}
           <div className="text-center mb-12">
             <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-4">
-              Founder & Developer
+              Contributors
             </h1>
             <p className="text-lg text-muted-foreground">
-              Meet the creator behind the DIU Learning Platform
+              Meet the team behind the DIU Learning Platform
             </p>
           </div>
 
-          {/* Profile Card */}
-          <div className="bg-card border border-border rounded-2xl shadow-lg overflow-hidden">
+          {/* Founder Profile Card */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-foreground mb-4 px-2">Founder & Developer</h2>
+            <div className="bg-card border border-border rounded-2xl shadow-lg overflow-hidden">
             <div className="relative h-32 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/5"></div>
             
             <div className="px-6 md:px-8 pb-8">
@@ -123,6 +125,66 @@ export default function ContributorPage() {
                   <div className="text-center">
                     <div className="text-3xl font-bold text-foreground mb-1">24/7</div>
                     <div className="text-sm text-muted-foreground">Available</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            </div>
+          </div>
+
+          {/* Other Contributors */}
+          <div className="mt-12">
+            <h2 className="text-2xl font-bold text-foreground mb-4 px-2">Contributors</h2>
+            <div className="bg-card border border-border rounded-2xl shadow-lg overflow-hidden">
+              <div className="relative h-32 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/5"></div>
+              
+              <div className="px-6 md:px-8 pb-8">
+                {/* Avatar */}
+                <div className="relative -mt-16 mb-6">
+                  <div className="w-32 h-32 rounded-2xl bg-background border-4 border-background shadow-xl overflow-hidden">
+                    <img
+                      src="/photo_2025-10-25_20-22-50.jpg"
+                      alt="Tanvir Mahmud"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
+
+                {/* Profile Info */}
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-3xl font-bold text-foreground mb-2">
+                      Tanvir Mahmud
+                    </h2>
+                    <p className="text-xl text-primary font-semibold mb-4">
+                      Contributor
+                    </p>
+                    <p className="text-muted-foreground leading-relaxed text-lg">
+                      Contributing to the DIU Learning Platform to enhance the educational 
+                      experience for students. Passionate about open-source development and 
+                      collaborative projects.
+                    </p>
+                  </div>
+
+                  {/* Links */}
+                  <div className="flex flex-wrap gap-3 pt-4">
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => window.open('https://github.com/i-mTanvir/', '_blank')}
+                    >
+                      <Github className="h-4 w-4" />
+                      GitHub
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => window.open('https://www.linkedin.com/in/tanvir-mahmud-alamin', '_blank')}
+                    >
+                      <Linkedin className="h-4 w-4" />
+                      LinkedIn
+                    </Button>
                   </div>
                 </div>
               </div>
