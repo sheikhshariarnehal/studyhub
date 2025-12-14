@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase"
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const id = params.id
+    const { id } = await params
     const supabase = createClient()
 
     const { data, error } = await supabase
@@ -66,11 +66,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const body = await req.json()
     const { title, url, topic_id, order_index } = body
-    const id = params.id
+    const { id } = await params
 
     const updateData: Record<string, unknown> = {}
     if (title !== undefined) updateData.title = title
@@ -122,9 +122,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const id = Number.parseInt(params.id)
+    const { id: paramId } = await params
+    const id = Number.parseInt(paramId)
     const supabase = createClient()
 
     const { error } = await supabase.from("slides").delete().eq("id", id)

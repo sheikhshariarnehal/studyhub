@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase"
 import bcrypt from "bcryptjs"
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { email, password, full_name, role, department, phone, is_active } = await request.json()
-    const userId = params.id
+    const { id: userId } = await params
 
     if (!email || !full_name) {
       return NextResponse.json(
@@ -94,9 +94,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const userId = params.id
+    const { id: userId } = await params
     const supabase = createClient()
 
     // Check if user exists

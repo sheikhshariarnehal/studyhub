@@ -45,7 +45,7 @@ async function verifySectionAdmin(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const authResult = await verifySectionAdmin(request)
     if (authResult.error) {
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     const user = authResult.user!
-    const semesterId = params.id
+    const { id: semesterId } = await params
 
     // Get semester with all related data
     let query = supabase
@@ -94,7 +94,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const authResult = await verifySectionAdmin(request)
     if (authResult.error) {
@@ -102,7 +102,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }
 
     const user = authResult.user!
-    const semesterId = params.id
+    const { id: semesterId } = await params
     const body = await request.json()
 
     // First, check if the semester exists and user has permission
@@ -179,7 +179,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const authResult = await verifySectionAdmin(request)
     if (authResult.error) {
@@ -187,7 +187,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     }
 
     const user = authResult.user!
-    const semesterId = params.id
+    const { id: semesterId } = await params
 
     // First, check if the semester exists and user has permission
     let checkQuery = supabase

@@ -4,10 +4,10 @@ import { supabase } from "@/lib/supabase"
 // Optimized content endpoint with minimal data transfer
 export async function GET(
   request: NextRequest,
-  { params }: { params: { type: string; id: string } }
+  { params }: { params: Promise<{ type: string; id: string }> }
 ) {
   try {
-    const { type, id } = params
+    const { type, id } = await params
     
     // Add cache headers for better performance
     const headers = {
