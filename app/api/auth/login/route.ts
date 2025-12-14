@@ -105,18 +105,20 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json({
       success: true,
       user: userWithoutPassword,
-      token
+      token,
+      redirectUrl: "/admin" // Explicit redirect URL
     })
 
-    // Set HTTP-only cookie
+    // Set HTTP-only cookie with production-safe settings
     console.log("🔍 Setting cookie with NODE_ENV:", process.env.NODE_ENV)
     console.log("🔍 Cookie secure setting:", process.env.NODE_ENV === "production")
     response.cookies.set("admin_token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // Fix for Vercel
       path: "/",
-      maxAge: 24 * 60 * 60 // 24 hours
+      maxAge: 24 * 60 * 60, // 24 hours
+      domain: process.env.NODE_ENV === "production" ? undefined : "localhost" // Let Vercel handle domain
     })
     console.log("✅ Cookie set successfully with path: /")
 

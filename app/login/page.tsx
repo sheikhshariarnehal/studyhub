@@ -67,16 +67,16 @@ export default function LoginPage() {
 
       if (data.success) {
         console.log("✅ Login successful, redirecting to admin...")
+        
+        // Use the redirect URL from the response
+        const redirectUrl = data.redirectUrl || "/admin"
 
         // Force a small delay to ensure cookie is set
         await new Promise(resolve => setTimeout(resolve, 500))
 
-        // Use window.location for full page reload to clear cache
-        console.log("🔄 Redirecting to admin dashboard...")
-        window.location.href = "/admin"
-        
-        // Alternative: Force hard reload if needed
-        // window.location.replace("/admin")
+        // Use window.location.replace for full page reload to clear cache
+        console.log("🔄 Redirecting to:", redirectUrl)
+        window.location.replace(redirectUrl)
       } else {
         console.log("❌ Login failed:", data.error)
         setError(data.error || "Login failed")

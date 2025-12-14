@@ -65,11 +65,14 @@ export default function AdminLoginPage() {
       const data = await response.json()
 
       if (data.success) {
-        // Wait a bit for cookie to be set
-        await new Promise(resolve => setTimeout(resolve, 200))
+        // Use the redirect URL from the response
+        const redirectUrl = data.redirectUrl || "/admin"
         
-        // Force a full page reload to ensure cookie is read
-        window.location.href = "/admin"
+        // Wait for cookie to be properly set
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // Force a full page reload to ensure cookie is read by middleware
+        window.location.replace(redirectUrl)
       } else {
         setError(data.error || "Login failed")
       }
