@@ -19,11 +19,6 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
   const [showTimeout, setShowTimeout] = useState(false)
 
-  // If on login page, just render children without auth check
-  if (pathname === "/admin/login") {
-    return <>{children}</>
-  }
-
   useEffect(() => {
     // Show timeout message if loading takes too long
     const timer = setTimeout(() => {
@@ -34,6 +29,11 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
 
     return () => clearTimeout(timer)
   }, [loading])
+
+  // If on login page, just render children without auth check
+  if (pathname === "/admin/login") {
+    return <>{children}</>
+  }
 
   if (loading) {
     return (
@@ -71,20 +71,15 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) {
-    // This should not happen due to middleware, but just in case
+    // Redirect to admin login page
+    if (typeof window !== 'undefined') {
+      window.location.href = '/admin/login'
+    }
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="text-center space-y-4 max-w-md">
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Access Denied</AlertTitle>
-            <AlertDescription>
-              Please log in to access the admin panel.
-            </AlertDescription>
-          </Alert>
-          <Button asChild>
-            <Link href="/login">Go to Login</Link>
-          </Button>
+          <Loader2 className="h-8 w-8 animate-spin mx-auto" />
+          <p className="text-sm text-muted-foreground">Redirecting to login...</p>
         </div>
       </div>
     )

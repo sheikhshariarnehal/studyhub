@@ -32,13 +32,33 @@ export function middleware(request: NextRequest) {
     console.log("Middleware called for:", pathname)
   }
 
+  // Get token early to check authentication status
+  const token = request.cookies.get("admin_token")?.value
+
   // Add analytics headers for tracking
   const response = NextResponse.next()
   response.headers.set('x-pathname', pathname)
   response.headers.set('x-timestamp', new Date().toISOString())
 
-  // Allow access to login page without authentication
-  if (pathname === "/login") {
+  // Allow access to login pages without authentication
+  // If already authenticated and trying to access login, redirect to admin dashboard
+  if (pathname === "/login" || pathname === "/admin/login") {
+    if (token) {
+      try {
+        // Verify token is valid
+        verifyJWT(token, JWT_SECRET)
+        // Token is valid, redirect to admin dashboard
+        if (process.env.NODE_ENV === 'development') {
+          console.log("Authenticated user accessing login page, redirecting to /admin")
+        }
+        return NextResponse.redirect(new URL("/admin", request.url))
+      } catch (error) {
+        // Invalid token, allow access to login page
+        if (process.env.NODE_ENV === 'development') {
+          console.log("Invalid token on login page, allowing access")
+        }
+      }
+    }
     if (process.env.NODE_ENV === 'development') {
       console.log("Allowing access to login page")
     }
@@ -48,8 +68,6 @@ export function middleware(request: NextRequest) {
   // Check if accessing admin routes
   if (pathname.startsWith("/admin")) {
     // For all admin routes, check authentication
-    const token = request.cookies.get("admin_token")?.value
-
     if (process.env.NODE_ENV === 'development') {
       console.log("🔍 Admin route access attempt:", pathname)
       console.log("🔍 Token found:", token ? "YES" : "NO")
@@ -61,7 +79,7 @@ export function middleware(request: NextRequest) {
       if (process.env.NODE_ENV === 'development') {
         console.log("❌ No token found, redirecting to login")
       }
-      return NextResponse.redirect(new URL("/login", request.url))
+      return NextResponse.redirect(new URL("/admin/login", request.url))
     }
 
     try {
@@ -98,7 +116,7 @@ export function middleware(request: NextRequest) {
       if (process.env.NODE_ENV === 'development') {
         console.log("❌ No token found, redirecting to login")
       }
-      return NextResponse.redirect(new URL("/login", request.url))
+      return NextResponse.redirect(new URL("/admin/login", request.url))
     }
 
     try {
@@ -114,7 +132,7 @@ export function middleware(request: NextRequest) {
         console.log("❌ Invalid token error:", error.message)
       }
       // Invalid token, redirect to login
-      const redirectResponse = NextResponse.redirect(new URL("/login", request.url))
+      const redirectResponse = NextResponse.redirect(new URL("/admin/login", request.url))
       redirectResponse.cookies.delete("admin_token")
       return redirectResponse
     }
