@@ -157,7 +157,7 @@ export default function ContributorPage() {
                       Tanvir Mahmud
                     </h2>
                     <p className="text-xl text-primary font-semibold mb-4">
-                      Contributor
+                      Web and App Developer
                     </p>
                     <p className="text-muted-foreground leading-relaxed text-lg">
                       Contributing to the DIU Learning Platform to enhance the educational 
@@ -184,6 +184,15 @@ export default function ContributorPage() {
                     >
                       <Linkedin className="h-4 w-4" />
                       LinkedIn
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => window.location.href = 'mailto:mahmud22205101398@diu.edu.bd'}
+                    >
+                      <Mail className="h-4 w-4" />
+                      Contact
                     </Button>
                   </div>
                 </div>
