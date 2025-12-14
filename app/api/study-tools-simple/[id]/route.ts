@@ -1,61 +1,120 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { createClient } from "@/lib/supabase"
+import {
+  notFoundResponse,
+  errorResponse,
+  validateUUID,
+  getSupabaseClient,
+  withErrorHandler,
+} from "@/lib/api-utils"
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  console.log("Study Tools API called with ID:", id)
+/**
+ * GET /api/study-tools-simple/[id]
+ * Simplified endpoint to fetch a study tool with course context
+ * Used for sharing and direct access
+ */
+export async function GET(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  return withErrorHandler(async () => {
+    const { id } = await params
+    
+    // Validate UUID format
+    const validationError = validateUUID(id, "study tool")
+    if (validationError) return validationError
 
-  try {
-    console.log("Creating Supabase client...")
+    const supabase = getSupabaseClient()
 
-    const supabase = createClient()
-    console.log("Supabase client created successfully")
-
-    console.log("Querying study_tools table...")
     const { data, error } = await supabase
       .from("study_tools")
-      .select("id, title, content_url, type")
+      .select(`
+        id, 
+        title, 
+        description,
+        type,
+        content_url,
+        exam_type,
+        file_size_mb,
+        file_format,
+        academic_year,
+        is_downloadable,
+        download_count,
+        course:courses!study_tools_course_id_fkey(
+          id, 
+          title, 
+          course_code,
+          teacher_name,
+          semester:semesters!courses_semester_id_fkey(
+            id,
+            title,
+            section,
+            is_active
+          )
+        )
+      `)
       .eq("id", id)
       .single()
 
-    console.log("Query result:", { data, error })
-
     if (error) {
-      console.error("Supabase error:", error)
       if (error.code === "PGRST116") {
-        return NextResponse.json({ error: "Study tool not found" }, { status: 404 })
+        return notFoundResponse("Study tool")
       }
-      return NextResponse.json({
-        error: error.message,
-        code: error.code,
-        details: error
-      }, { status: 500 })
+      console.error("Supabase error:", error)
+      return errorResponse(error.message, 500)
     }
 
     if (!data) {
-      console.log("No data returned")
-      return NextResponse.json({ error: "Study tool not found" }, { status: 404 })
+      return notFoundResponse("Study tool")
     }
 
-    console.log("Returning study tool data:", data)
+    // Increment download count asynchronously if it's downloadable
+    if (data.is_downloadable) {
+      supabase
+        .from("study_tools")
+        .update({ download_count: (data.download_count || 0) + 1 })
+        .eq("id", id)
+        .then(() => {})
+        .catch(err => console.error("Failed to update download count:", err))
+    }
 
-    // Simple response format
+    // Determine content type based on study tool type
+    const studyToolType = data.type === 'syllabus' ? 'syllabus' : 'study-tool'
+
+    // Format response with full context
     const response = {
       id: data.id,
       title: data.title,
       url: data.content_url,
-      description: data.type || "",
-      type: "document"
+      description: data.description,
+      type: studyToolType as 'syllabus' | 'study-tool',
+      studyToolType: data.type,
+      exam_type: data.exam_type,
+      file_size_mb: data.file_size_mb,
+      file_format: data.file_format,
+      academic_year: data.academic_year,
+      is_downloadable: data.is_downloadable,
+      download_count: data.download_count,
+      course: data.course ? {
+        id: data.course.id,
+        title: data.course.title,
+        course_code: data.course.course_code,
+        teacher_name: data.course.teacher_name,
+        semester: data.course.semester ? {
+          id: data.course.semester.id,
+          title: data.course.semester.title,
+          section: data.course.semester.section,
+          is_active: data.course.semester.is_active,
+        } : undefined,
+      } : undefined,
+      semesterInfo: data.course?.semester ? {
+        id: data.course.semester.id,
+        title: data.course.semester.title,
+        section: data.course.semester.section,
+        is_active: data.course.semester.is_active,
+      } : undefined,
     }
 
+    // Return raw JSON for backward compatibility with frontend
     return NextResponse.json(response)
-
-  } catch (err) {
-    console.error("API Error:", err)
-    return NextResponse.json({
-      error: "Failed to fetch study tool",
-      details: err instanceof Error ? err.message : 'Unknown error',
-      stack: err instanceof Error ? err.stack : 'No stack trace'
-    }, { status: 500 })
-  }
+  })
 }

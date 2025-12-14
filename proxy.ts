@@ -19,12 +19,16 @@ import type { NextRequest } from 'next/server'
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production"
 const isDev = process.env.NODE_ENV === 'development'
 
-// Shareable content URL patterns (UUID format)
-const SHAREABLE_PATTERNS = [
-  /^\/video\/[a-f0-9-]{36}$/i,
-  /^\/slide\/[a-f0-9-]{36}$/i,
-  /^\/study-tool\/[a-f0-9-]{36}$/i
+// Shareable content URL patterns
+// Legacy format: /type/uuid (e.g., /video/uuid)
+const LEGACY_SHAREABLE_PATTERNS = [
+  /^\/video\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i,
+  /^\/slide\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i,
+  /^\/study-tool\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
 ]
+
+// Semantic format: /semester/course/type/uuid (e.g., /fall-2025/cse331/video/uuid)
+const SEMANTIC_URL_PATTERN = /^\/[a-z0-9-]+\/[a-z0-9-]+\/(video|slide|study-tool)\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i
 
 // ============================================
 // JWT Verification (Edge Runtime Compatible)
@@ -100,11 +104,16 @@ function handleAdminAuth(
 // ============================================
 
 function handleShareableUrl(request: NextRequest, pathname: string): NextResponse | null {
-  const isShareable = SHAREABLE_PATTERNS.some(pattern => pattern.test(pathname))
+  // Check legacy format: /type/uuid
+  const isLegacyShareable = LEGACY_SHAREABLE_PATTERNS.some(pattern => pattern.test(pathname))
   
-  if (!isShareable) return null
+  // Check semantic format: /semester/course/type/uuid
+  const isSemanticShareable = SEMANTIC_URL_PATTERN.test(pathname)
+  
+  if (!isLegacyShareable && !isSemanticShareable) return null
 
   log("📤 Shareable URL detected:", pathname)
+  log("   Format:", isSemanticShareable ? "Semantic" : "Legacy")
 
   // Rewrite to main page with share path parameter
   const url = request.nextUrl.clone()
@@ -162,11 +171,17 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
+    // Admin routes
     '/admin/:path*',
     '/section-admin/:path*',
     '/login',
+    // Legacy shareable URLs
     '/video/:path*',
     '/slide/:path*',
-    '/study-tool/:path*'
+    '/study-tool/:path*',
+    // Semantic shareable URLs: /semester/course/type/uuid
+    '/:semester/:course/video/:id*',
+    '/:semester/:course/slide/:id*',
+    '/:semester/:course/study-tool/:id*',
   ]
 }

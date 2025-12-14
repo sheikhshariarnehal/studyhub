@@ -21,7 +21,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           id,
           title,
           course_code,
-          teacher_name
+          teacher_name,
+          semester:semesters (
+            id,
+            title,
+            section
+          )
         )
       `)
       .eq("id", id)
@@ -38,6 +43,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
 
     // Transform the data for consistent API response
+    const courseData = Array.isArray(data.course) ? data.course[0] : data.course as any;
+    const semesterData = courseData?.semester ? 
+      (Array.isArray(courseData.semester) ? courseData.semester[0] : courseData.semester) : null;
+
     const transformedData = {
       id: data.id,
       title: data.title,
@@ -47,30 +56,31 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       examType: data.exam_type,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
-      course: data.course ? (() => {
-        const courseData = Array.isArray(data.course) ? data.course[0] : data.course as any;
-        return courseData ? {
-          id: courseData.id,
-          title: courseData.title,
-          courseCode: courseData.course_code,
-          teacherName: courseData.teacher_name
-        } : null;
-      })() : null,
+      course: courseData ? {
+        id: courseData.id,
+        title: courseData.title,
+        courseCode: courseData.course_code,
+        course_code: courseData.course_code, // Also include snake_case for compatibility
+        teacherName: courseData.teacher_name,
+        semester: semesterData ? {
+          id: semesterData.id,
+          title: semesterData.title,
+          section: semesterData.section,
+          name: semesterData.title
+        } : null
+      } : null,
       // SEO and sharing metadata
-      metadata: (() => {
-        const courseData = Array.isArray(data.course) ? data.course[0] : data.course as any;
-        return {
-          title: courseData?.title ? `${data.title} - ${courseData.title}` : data.title,
-          description: `${data.type.replace('_', ' ').toUpperCase()}${courseData?.title ? ` for ${courseData.title} course` : ''}`,
-          courseTitle: courseData?.title || null,
-          semesterTitle: null,
-          teacherName: courseData?.teacher_name || null,
-          studyToolType: data.type,
-          examType: data.exam_type,
-          shareUrl: `/study-tool/${data.id}`,
-          embedUrl: data.content_url
-        };
-      })()
+      metadata: {
+        title: courseData?.title ? `${data.title} - ${courseData.title}` : data.title,
+        description: `${data.type.replace('_', ' ').toUpperCase()}${courseData?.title ? ` for ${courseData.title} course` : ''}`,
+        courseTitle: courseData?.title || null,
+        semesterTitle: semesterData?.title || null,
+        teacherName: courseData?.teacher_name || null,
+        studyToolType: data.type,
+        examType: data.exam_type,
+        shareUrl: `/study-tool/${data.id}`,
+        embedUrl: data.content_url
+      }
     }
 
     return NextResponse.json(transformedData)

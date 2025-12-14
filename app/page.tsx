@@ -99,11 +99,13 @@ export default function HomePage() {
       if (parsedUrl) {
         try {
           setFallbackLoading(true)
-          // Use optimized content loading
+
+          let apiEndpoint: string
+          let contentData: any
+
+          // Use simplified endpoints - both semantic and legacy URLs now use full UUID
           await loadContent(parsedUrl.type, parsedUrl.id)
 
-          // Fetch content data from API (using simplified endpoints)
-          let apiEndpoint
           if (parsedUrl.type === 'slide') {
             apiEndpoint = `/api/slides-simple/${parsedUrl.id}`
           } else if (parsedUrl.type === 'video') {
@@ -111,85 +113,86 @@ export default function HomePage() {
           } else if (parsedUrl.type === 'study-tool') {
             apiEndpoint = `/api/study-tools-simple/${parsedUrl.id}`
           } else {
-            // Fallback to regular API
             apiEndpoint = `/api/${parsedUrl.type === 'study-tool' ? 'study-tools' : `${parsedUrl.type}s`}/${parsedUrl.id}`
           }
           console.log("API Endpoint:", apiEndpoint)
 
           const response = await fetch(apiEndpoint)
           console.log("API Response status:", response.status)
-          console.log("API Response headers:", Object.fromEntries(response.headers.entries()))
 
-          if (response.ok) {
-            const contentData = await response.json()
-            console.log("Content Data:", contentData)
-
-            if (!contentData || !contentData.id) {
-              console.error("Invalid content data received:", contentData)
-              throw new Error("Invalid content data received from API")
-            }
-
-            // Convert API response to ContentItem format
-            const content: ContentItem = {
-              id: contentData.id,
-              type: parsedUrl.type === 'study-tool' ?
-                    (contentData.studyToolType === 'syllabus' ? 'syllabus' : 'study-tool') :
-                    parsedUrl.type as "slide" | "video",
-              title: contentData.title,
-              url: contentData.url,
-              topicTitle: parsedUrl.type === 'study-tool' ? undefined : contentData.topic?.title,
-              courseTitle: parsedUrl.type === 'study-tool' ?
-                    contentData.course?.title :
-                    (contentData.topic?.course?.title || contentData.course?.title),
-              description: contentData.description,
-            }
-
-            console.log("Setting content:", content)
-            setSelectedContent(content)
-
-            // Update the browser URL to show the shareable URL (without query params)
-            const shareUrl = generateSimpleShareUrl(parsedUrl.type, parsedUrl.id)
-            updateUrlWithoutNavigation(shareUrl)
-
-            // Removed toast notification - no popup when content loads
-          } else {
-            console.error("API Error:", response.status, response.statusText)
-            const errorData = await response.text()
-            console.error("Error details:", errorData)
-
-            if (response.status === 404) {
-              console.log("Content not found, redirecting to browse page")
-              toast({
-                title: "Content Not Found",
-                description: "The requested content could not be found. Redirecting to browse available content...",
-                variant: "destructive",
-              })
-
-              // Redirect to appropriate browse page based on content type
-              setTimeout(() => {
-                if (parsedUrl.type === 'slide') {
-                  window.location.href = '/browse-slides'
-                } else if (parsedUrl.type === 'video') {
-                  window.location.href = '/browse-videos'
-                } else {
-                  window.location.href = '/test-api'
-                }
-              }, 2000)
-            } else {
-              toast({
-                title: "Error Loading Content",
-                description: `Failed to load content: ${response.status}`,
-                variant: "destructive",
-              })
-            }
+          if (!response.ok) {
+            throw new Error(`API Error: ${response.status}`)
           }
-        } catch (error) {
+          contentData = await response.json()
+
+          console.log("Content Data:", contentData)
+
+          if (!contentData || !contentData.id) {
+            console.error("Invalid content data received:", contentData)
+            throw new Error("Invalid content data received from API")
+          }
+
+          // Convert API response to ContentItem format
+          const content: ContentItem = {
+            id: contentData.id,
+            type: parsedUrl.type === 'study-tool' ?
+                  (contentData.studyToolType === 'syllabus' ? 'syllabus' : 'study-tool') :
+                  parsedUrl.type as "slide" | "video",
+            title: contentData.title,
+            url: contentData.url,
+            topicTitle: parsedUrl.type === 'study-tool' ? undefined : contentData.topic?.title,
+            courseTitle: parsedUrl.type === 'study-tool' ?
+                  contentData.course?.title :
+                  (contentData.topic?.course?.title || contentData.course?.title),
+            description: contentData.description,
+            // Include semester info for sidebar auto-selection
+            semesterInfo: contentData.semesterInfo || contentData.course?.semester || contentData.topic?.course?.semester,
+          }
+
+          console.log("Setting content:", content)
+          setSelectedContent(content)
+
+          // Update the browser URL to show semantic shareable URL
+          // Build content data for semantic URL generation
+          const urlContentData = {
+            id: contentData.id,
+            title: contentData.title,
+            topic: contentData.topic,
+            course: contentData.course,
+          }
+          const shareUrl = generateSimpleShareUrl(parsedUrl.type, contentData.id, urlContentData)
+          updateUrlWithoutNavigation(shareUrl)
+
+          // Removed toast notification - no popup when content loads
+        } catch (error: any) {
           console.error("Error loading content from URL:", error)
-          toast({
-            title: "Error",
-            description: "Failed to load content from URL",
-            variant: "destructive",
-          })
+          
+          // Handle 404 errors
+          if (error.message?.includes('404')) {
+            console.log("Content not found, redirecting to browse page")
+            toast({
+              title: "Content Not Found",
+              description: "The requested content could not be found. Redirecting to browse available content...",
+              variant: "destructive",
+            })
+
+            // Redirect to appropriate browse page based on content type
+            setTimeout(() => {
+              if (parsedUrl.type === 'slide') {
+                window.location.href = '/browse-slides'
+              } else if (parsedUrl.type === 'video') {
+                window.location.href = '/browse-videos'
+              } else {
+                window.location.href = '/test-api'
+              }
+            }, 2000)
+          } else {
+            toast({
+              title: "Error",
+              description: "Failed to load content from URL",
+              variant: "destructive",
+            })
+          }
         } finally {
           setFallbackLoading(false)
         }
@@ -315,7 +318,29 @@ export default function HomePage() {
       // Generate shareable URL and update the browser URL without navigation
       const contentType = content.type === "document" ? "slide" :
                          content.type === "syllabus" ? "study-tool" : content.type
-      const shareUrl = generateSimpleShareUrl(contentType, content.id)
+      
+      // Build content data structure for semantic URL generation
+      // Format: /semester-title/course-code/content-type/uuid
+      const urlContentData = {
+        id: content.id,
+        topic: content.topicTitle ? {
+          course: content.courseTitle ? {
+            course_code: content.courseCode || null,
+            semester: content.semesterInfo ? {
+              title: content.semesterInfo.title,
+            } : null,
+          } : null,
+        } : null,
+        // For study-tools that link directly to course
+        course: content.type === 'study-tool' || content.type === 'syllabus' ? {
+          course_code: content.courseCode || null,
+          semester: content.semesterInfo ? {
+            title: content.semesterInfo.title,
+          } : null,
+        } : null,
+      }
+      
+      const shareUrl = generateSimpleShareUrl(contentType, content.id, urlContentData)
 
       console.log("Generated share URL:", shareUrl)
       console.log("Updating browser URL...")
@@ -483,6 +508,7 @@ export default function HomePage() {
               <FunctionalSidebar
                 onContentSelect={handleContentSelect}
                 selectedContentId={selectedContent?.id}
+                initialSemesterId={selectedContent?.semesterInfo?.id}
               />
             </div>
           </>
@@ -605,6 +631,7 @@ export default function HomePage() {
                 <FunctionalSidebar
                   onContentSelect={handleContentSelect}
                   selectedContentId={selectedContent?.id}
+                  initialSemesterId={selectedContent?.semesterInfo?.id}
                 />
               </div>
             </div>

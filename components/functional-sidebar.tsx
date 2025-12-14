@@ -80,6 +80,7 @@ interface ContentItem {
 interface FunctionalSidebarProps {
   onContentSelect: (content: ContentItem) => void
   selectedContentId?: string
+  initialSemesterId?: string // Auto-select this semester when loading content from URL
 }
 
 // Cache for storing fetched data
@@ -98,7 +99,7 @@ const getCachedData = async (key: string, fetchFn: () => Promise<any>): Promise<
   return data
 }
 
-export function FunctionalSidebar({ onContentSelect, selectedContentId }: FunctionalSidebarProps) {
+export function FunctionalSidebar({ onContentSelect, selectedContentId, initialSemesterId }: FunctionalSidebarProps) {
   const [semesters, setSemesters] = useState([])
   const [selectedSemester, setSelectedSemester] = useState("")
   const [courses, setCourses] = useState([])
@@ -134,7 +135,19 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId }: Functi
   // Fetch semesters on component mount
   useEffect(() => {
     fetchSemesters()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Update selected semester when initialSemesterId changes (e.g., loading content from URL)
+  useEffect(() => {
+    if (initialSemesterId && semesters.length > 0) {
+      const validSemester = semesters.find((s: any) => s.id === initialSemesterId)
+      if (validSemester && selectedSemester !== initialSemesterId) {
+        console.log("Auto-selecting semester from URL content:", initialSemesterId)
+        setSelectedSemester(initialSemesterId)
+      }
+    }
+  }, [initialSemesterId, semesters, selectedSemester])
 
   // Fetch courses when semester changes
   useEffect(() => {
@@ -266,10 +279,28 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId }: Functi
 
       setSemesters(data)
 
-      // Auto-select the first active semester, or fallback to the first semester
+      // Priority for semester selection:
+      // 1. initialSemesterId from URL content (if valid)
+      // 2. First active semester
+      // 3. First semester in list
       if (data && data.length > 0) {
-        const activeSemester = data.find(semester => semester.is_active === true)
-        const semesterToSelect = activeSemester || data[0]
+        let semesterToSelect = null
+        
+        // Check if initialSemesterId is provided and valid
+        if (initialSemesterId) {
+          semesterToSelect = data.find((s: any) => s.id === initialSemesterId)
+        }
+        
+        // Fallback to active semester
+        if (!semesterToSelect) {
+          semesterToSelect = data.find((semester: any) => semester.is_active === true)
+        }
+        
+        // Fallback to first semester
+        if (!semesterToSelect) {
+          semesterToSelect = data[0]
+        }
+        
         setSelectedSemester(semesterToSelect.id)
       }
     } catch (err) {
@@ -499,6 +530,8 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId }: Functi
       topicTitle?: string,
       courseTitle?: string,
       description?: string,
+      courseCode?: string,
+      semesterInfo?: { id: string; title: string; section: string; is_active: boolean },
     ) => {
       onContentSelect({
         type,
@@ -508,6 +541,8 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId }: Functi
         topicTitle,
         courseTitle,
         description,
+        courseCode,
+        semesterInfo,
       })
     },
     [onContentSelect],
@@ -730,28 +765,40 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId }: Functi
               <p className="text-xs text-muted-foreground/70 mt-2">Check your semester selection</p>
             </div>
           ) : (
-            filteredCourses.map((course) => (
-              <CourseItem
-                key={course.id}
-                course={course}
-                courseData={courseData[course.id]}
-                expandedCourses={expandedCourses}
-                expandedStudyTools={expandedStudyTools}
-                expandedTopics={expandedTopics}
-                expandedTopicItems={expandedTopicItems}
-                onToggleCourse={toggleCourse}
-                onToggleStudyTools={toggleStudyTools}
-                onToggleTopics={toggleTopics}
-                onToggleTopicItem={toggleTopicItem}
-                onContentClick={handleContentClick}
-                getStudyToolIcon={getStudyToolIcon}
-                getStudyToolLabel={getStudyToolLabel}
-                selectedContentId={selectedContentId}
-                isMobile={isMobile}
-                compactMode={compactMode}
-                isScrolling={isScrolling}
-              />
-            ))
+            filteredCourses.map((course) => {
+              // Get current semester info for semantic URLs
+              const currentSemester = semesters.find((s: any) => s.id === selectedSemester)
+              const semesterInfo = currentSemester ? {
+                id: currentSemester.id,
+                title: currentSemester.title,
+                section: currentSemester.section || '',
+                is_active: currentSemester.is_active || false,
+              } : undefined
+
+              return (
+                <CourseItem
+                  key={course.id}
+                  course={course}
+                  courseData={courseData[course.id]}
+                  expandedCourses={expandedCourses}
+                  expandedStudyTools={expandedStudyTools}
+                  expandedTopics={expandedTopics}
+                  expandedTopicItems={expandedTopicItems}
+                  onToggleCourse={toggleCourse}
+                  onToggleStudyTools={toggleStudyTools}
+                  onToggleTopics={toggleTopics}
+                  onToggleTopicItem={toggleTopicItem}
+                  onContentClick={handleContentClick}
+                  getStudyToolIcon={getStudyToolIcon}
+                  getStudyToolLabel={getStudyToolLabel}
+                  selectedContentId={selectedContentId}
+                  isMobile={isMobile}
+                  compactMode={compactMode}
+                  isScrolling={isScrolling}
+                  semesterInfo={semesterInfo}
+                />
+              )
+            })
           )}
         </div>
       </ScrollArea>
@@ -779,6 +826,7 @@ const CourseItem = React.memo(
     isMobile = false,
     compactMode = false,
     isScrolling = false,
+    semesterInfo,
   }: {
     course: Course
     courseData?: any
@@ -798,6 +846,8 @@ const CourseItem = React.memo(
       topicTitle?: string,
       courseTitle?: string,
       description?: string,
+      courseCode?: string,
+      semesterInfo?: { id: string; title: string; section: string; is_active: boolean },
     ) => void
     getStudyToolIcon: (type: string) => React.ReactNode
     getStudyToolLabel: (type: string) => string
@@ -805,6 +855,7 @@ const CourseItem = React.memo(
     isMobile?: boolean
     compactMode?: boolean
     isScrolling?: boolean
+    semesterInfo?: { id: string; title: string; section: string; is_active: boolean }
   }) => {
     return (
       <div className={`${isMobile ? 'space-y-2' : 'space-y-1.5'}`}>
@@ -944,9 +995,9 @@ const CourseItem = React.memo(
                           onClick={() => {
                             if (tool.type === "syllabus") {
                               // For syllabus, use description as content and pass it via URL parameter
-                              onContentClick("syllabus", tool.title, `#syllabus-${tool.id}`, tool.id, undefined, course.title, tool.description)
+                              onContentClick("syllabus", tool.title, `#syllabus-${tool.id}`, tool.id, undefined, course.title, tool.description, course.course_code, semesterInfo)
                             } else if (tool.content_url) {
-                              onContentClick("study-tool", tool.title, tool.content_url, tool.id, undefined, course.title)
+                              onContentClick("study-tool", tool.title, tool.content_url, tool.id, undefined, course.title, undefined, course.course_code, semesterInfo)
                             }
                           }}
                           disabled={tool.type !== "syllabus" && !tool.content_url}
@@ -1065,6 +1116,9 @@ const CourseItem = React.memo(
                                         video.id,
                                         topic.title,
                                         course.title,
+                                        undefined,
+                                        course.course_code,
+                                        semesterInfo,
                                       )
                                     }
                                   >
@@ -1116,6 +1170,9 @@ const CourseItem = React.memo(
                                         slide.id,
                                         topic.title,
                                         course.title,
+                                        undefined,
+                                        course.course_code,
+                                        semesterInfo,
                                       )
                                     }
                                   >

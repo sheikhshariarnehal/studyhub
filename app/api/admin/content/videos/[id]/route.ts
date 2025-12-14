@@ -1,6 +1,34 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase"
 
+// Type for nested relations from Supabase
+interface VideoWithRelations {
+  id: string
+  title: string
+  youtube_url: string
+  description: string | null
+  duration: string | null
+  order_index: number
+  topic_id: string
+  created_at: string
+  updated_at: string
+  topic: {
+    id: string
+    title: string
+    course: {
+      id: string
+      title: string
+      course_code: string
+      teacher_name: string | null
+      semester: {
+        id: string
+        title: string
+        section: string | null
+      } | null
+    } | null
+  } | null
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
@@ -45,20 +73,23 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
+    // Cast to known type for safe access
+    const video = data as unknown as VideoWithRelations
+
     return NextResponse.json({
-      ...data,
-      url: data.youtube_url,
+      ...video,
+      url: video.youtube_url,
       type: "video",
-      topic: {
-        ...data.topic,
-        course: {
-          ...data.topic.course,
-          semester: {
-            ...data.topic.course.semester,
-            name: data.topic.course.semester?.title || ""
-          },
-        },
-      },
+      topic: video.topic ? {
+        ...video.topic,
+        course: video.topic.course ? {
+          ...video.topic.course,
+          semester: video.topic.course.semester ? {
+            ...video.topic.course.semester,
+            name: video.topic.course.semester.title || ""
+          } : null,
+        } : null,
+      } : null,
     })
   } catch (err) {
     console.error("[videos] GET error:", err)
@@ -106,16 +137,34 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({
-      ...data,
-      url: data.youtube_url,
+    // Type for PATCH response
+    interface PatchVideoResponse {
+      id: string
+      title: string
+      youtube_url: string
+      order_index: number
+      topic_id: string
       topic: {
-        ...data.topic,
+        title: string
         course: {
-          ...data.topic.course,
-          semester: { name: data.topic.course.semester?.title || "" },
-        },
-      },
+          title: string
+          semester: { title: string } | null
+        } | null
+      } | null
+    }
+
+    const video = data as unknown as PatchVideoResponse
+
+    return NextResponse.json({
+      ...video,
+      url: video.youtube_url,
+      topic: video.topic ? {
+        ...video.topic,
+        course: video.topic.course ? {
+          ...video.topic.course,
+          semester: { name: video.topic.course.semester?.title || "" },
+        } : null,
+      } : null,
     })
   } catch (err) {
     console.error("[videos] PATCH error:", err)
@@ -125,8 +174,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { id: paramId } = await params
-    const id = Number.parseInt(paramId)
+    const { id } = await params
     const supabase = createClient()
 
     const { error } = await supabase.from("videos").delete().eq("id", id)
