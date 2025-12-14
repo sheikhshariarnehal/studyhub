@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2, Eye, EyeOff, Shield, Lock, Mail, ArrowRight } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("")
@@ -13,6 +14,7 @@ export default function AdminLoginPage() {
   const [mounted, setMounted] = useState(false)
 
   const router = useRouter()
+  const { user, login: authLogin } = useAuth()
 
   // Animation on mount
   useEffect(() => {
@@ -21,27 +23,11 @@ export default function AdminLoginPage() {
 
   // Check if already logged in
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const response = await fetch("/api/auth/me", {
-          method: "GET",
-          credentials: "include",
-          cache: 'no-store',
-        })
-        if (response.ok) {
-          const data = await response.json()
-          if (data.success) {
-            // Already authenticated, redirect to admin
-            window.location.href = "/admin"
-          }
-        }
-      } catch (error) {
-        // User not logged in, stay on login page
-        console.log("User not logged in, showing login form")
-      }
+    if (user) {
+      // Already authenticated, redirect to admin
+      router.replace("/admin")
     }
-    checkAuth()
-  }, [router])
+  }, [user, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -55,24 +41,12 @@ export default function AdminLoginPage() {
     }
 
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({ email, password }),
-      })
-
-      const data = await response.json()
-      const result = { success: data.success, error: data.error }
+      // Use the auth context login function
+      const result = await authLogin(email, password)
 
       if (result.success) {
-        // Wait to ensure cookie is properly set and propagated
-        await new Promise(resolve => setTimeout(resolve, 500))
-        
-        // Force a hard navigation to ensure auth state is refreshed
-        window.location.href = "/admin"
+        // Auth context has set the user, now redirect
+        router.replace("/admin")
       } else {
         setError(result.error || "Login failed")
       }
