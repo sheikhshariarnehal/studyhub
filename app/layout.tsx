@@ -1,5 +1,6 @@
 import type React from "react"
 import type { Metadata, Viewport } from "next"
+import { Suspense } from "react"
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import { ThemeProvider } from "@/components/theme-provider"
@@ -190,7 +191,9 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-background text-foreground font-sans antialiased" suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange={false}>
-          <div className="relative flex min-h-screen flex-col">{children}</div>
+          <Suspense fallback={null}>
+            <div className="relative flex min-h-screen flex-col">{children}</div>
+          </Suspense>
         </ThemeProvider>
         <Analytics />
         <SpeedInsights />
