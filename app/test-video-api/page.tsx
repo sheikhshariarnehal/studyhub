@@ -254,7 +254,7 @@ export default function TestVideoApiPage() {
           <div className="mt-3 p-2 bg-yellow-100 rounded text-sm">
             <strong>Expected Results:</strong>
             <ul className="list-disc list-inside mt-1">
-              <li>List Videos: Should show count > 0 and video data</li>
+              <li>List Videos: Should show count {'>'} 0 and video data</li>
               <li>Test Video API: Should return 200 status with video data</li>
               <li>Test Share URL: Should open working video page</li>
               <li>Main Page: Video selection should work without 500 error</li>

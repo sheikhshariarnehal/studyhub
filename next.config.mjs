@@ -1,14 +1,24 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: true,
   },
   images: {
     unoptimized: true,
-    domains: ['drive.google.com', 'youtube.com', 'img.youtube.com'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'drive.google.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'youtube.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'img.youtube.com',
+      },
+    ],
     formats: ['image/webp', 'image/avif'],
   },
   // Enable experimental features for better performance
@@ -18,8 +28,6 @@ const nextConfig = {
   // Compression and caching
   compress: true,
   poweredByHeader: false,
-  // Optimized for Vercel deployment
-  output: 'standalone',
   // Production optimizations
   productionBrowserSourceMaps: false,
   reactStrictMode: true,

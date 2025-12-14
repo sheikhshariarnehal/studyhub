@@ -272,7 +272,7 @@ export default function TestStudyToolsFixPage() {
         <div className="bg-green-50 p-4 rounded-lg">
           <h3 className="font-semibold mb-2">Expected Results:</h3>
           <ul className="list-disc list-inside space-y-1 text-sm">
-            <li><strong>List Study Tools:</strong> Should return count > 0 with study tools data</li>
+            <li><strong>List Study Tools:</strong> Should return count {'>'}  0 with study tools data</li>
             <li><strong>Test Specific ID:</strong> Should return 200 with study tool data</li>
             <li><strong>Test Share URL:</strong> Should open working study tool page</li>
             <li><strong>Compare with Slides:</strong> Should show similar API structure</li>
