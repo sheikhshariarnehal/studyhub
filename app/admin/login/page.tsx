@@ -26,11 +26,13 @@ export default function AdminLoginPage() {
         const response = await fetch("/api/auth/me", {
           method: "GET",
           credentials: "include",
+          cache: 'no-store',
         })
         if (response.ok) {
           const data = await response.json()
           if (data.success) {
-            router.push("/admin")
+            // Already authenticated, redirect to admin
+            window.location.href = "/admin"
           }
         }
       } catch (error) {
@@ -66,6 +68,9 @@ export default function AdminLoginPage() {
       const result = { success: data.success, error: data.error }
 
       if (result.success) {
+        // Wait to ensure cookie is properly set and propagated
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
         // Force a hard navigation to ensure auth state is refreshed
         window.location.href = "/admin"
       } else {
