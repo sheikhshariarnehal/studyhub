@@ -8,6 +8,23 @@ Disallow: /debug-*
 Disallow: /minimal-test
 Disallow: /simple-login
 Disallow: /demo/
+Disallow: /section-admin/
+
+# Googlebot
+User-agent: Googlebot
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+Disallow: /test-*
+Disallow: /debug-*
+
+# Bingbot
+User-agent: Bingbot
+Allow: /
+Disallow: /admin/
+Disallow: /api/
+Disallow: /test-*
+Disallow: /debug-*
 
 # AhrefsBot
 User-agent: AhrefsBot
@@ -19,6 +36,10 @@ Disallow: /
 
 # DotBot
 User-agent: DotBot
+Disallow: /
+
+# SemrushBot
+User-agent: SemrushBot
 Disallow: /
 
 # Host

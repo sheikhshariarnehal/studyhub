@@ -7,18 +7,23 @@ import "./globals.css"
 
 export const metadata: Metadata = {
   title: {
-    default: "DIU Learning Platform - Computer Science & Engineering",
-    template: "%s | DIU Learning Platform"
+    default: "StudyHub DIU - Smart Learning Platform for CSE Students | Daffodil International University",
+    template: "%s | StudyHub DIU"
   },
-  description: "Access comprehensive learning materials, video lectures, slides, and study tools for Computer Science & Engineering courses at Daffodil International University (DIU). Enhance your academic journey with our optimized learning platform.",
+  description: "StudyHub DIU: Your ultimate learning companion for Computer Science & Engineering at Daffodil International University. Access 1000+ video lectures, slides, study materials, notes, and interactive tools. Join thousands of students achieving academic excellence.",
   viewport: "width=device-width, initial-scale=1",
   applicationName: "DIU Learning Platform",
   authors: [{ name: "DIU CSE Department" }],
   keywords: [
-    "DIU", "Daffodil International University", "Computer Science", "Engineering",
-    "Learning Platform", "Online Education", "Video Lectures", "Study Materials",
-    "Course Content", "Academic Resources", "CSE", "Bangladesh", "University",
-    "Slides", "Study Tools", "Educational Technology", "E-Learning"
+    "StudyHub DIU", "DIU Learning Platform", "Daffodil International University", 
+    "Computer Science Engineering", "CSE DIU", "DIU CSE", "Bangladesh University",
+    "Online Learning Bangladesh", "Video Lectures CSE", "Study Materials DIU",
+    "Course Content", "Academic Resources Bangladesh", "DIU Students",
+    "Slides Presentation", "Study Tools", "Educational Technology Bangladesh",
+    "E-Learning Platform", "Smart Learning", "University Bangladesh",
+    "Engineering Education", "Programming Courses", "Data Structures",
+    "Algorithms", "Web Development", "Database Management", "Software Engineering",
+    "DIU Notes", "DIU Videos", "DIU Study Materials", "CSE Resources"
   ],
   generator: "DIU Learning Platform",
   creator: "DIU CSE Department",
@@ -35,27 +40,27 @@ export const metadata: Metadata = {
     },
   },
   openGraph: {
-    title: "DIU Learning Platform - Computer Science & Engineering",
-    description: "Access comprehensive learning materials, video lectures, slides, and study tools for Computer Science & Engineering courses at Daffodil International University.",
+    title: "StudyHub DIU - Smart Learning Platform for CSE Students",
+    description: "Access comprehensive learning materials, video lectures, slides, and study tools for Computer Science & Engineering courses at Daffodil International University. Join thousands of students enhancing their academic journey.",
     type: "website",
-    siteName: "DIU Learning Platform",
+    siteName: "StudyHub DIU Learning Platform",
     locale: "en_US",
     url: "https://diu-learning.vercel.app",
     images: [
       {
-        url: "/images/diu-logo.png",
+        url: "/images/studyhub_diu_Favicon .png",
         width: 1200,
         height: 630,
-        alt: "DIU Learning Platform - Computer Science & Engineering",
+        alt: "StudyHub DIU - Computer Science & Engineering Learning Platform",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "DIU Learning Platform - Computer Science & Engineering",
-    description: "Access comprehensive learning materials, video lectures, slides, and study tools for CSE courses at DIU.",
+    title: "StudyHub DIU - Smart Learning Platform",
+    description: "Access comprehensive learning materials, video lectures, slides, and study tools for CSE courses at DIU. Join thousands of students enhancing their academic journey.",
     creator: "@DIU_Official",
-    images: ["/images/diu-logo.png"],
+    images: ["/images/studyhub_diu_Favicon .png"],
   },
   verification: {
     google: "your-google-verification-code",
@@ -87,10 +92,8 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="//youtube.com" />
 
   {/* App icons and manifest */}
-  {/* Use an existing placeholder SVG as the simple favicon to avoid 404s when favicon.ico is missing */}
-  <link rel="icon" href="/placeholder-logo.svg" sizes="any" />
-  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="icon" href="/images/studyhub_diu_Favicon .png" type="image/png" />
+  <link rel="apple-touch-icon" href="/images/studyhub_diu_Favicon .png" />
         <link rel="manifest" href="/manifest.json" />
 
         {/* Theme colors */}
@@ -111,10 +114,12 @@ export default function RootLayout({
             __html: JSON.stringify({
               "@context": "https://schema.org",
               "@type": "EducationalOrganization",
-              "name": "DIU Learning Platform",
-              "description": "Computer Science & Engineering learning platform for Daffodil International University students",
+              "name": "StudyHub DIU Learning Platform",
+              "alternateName": "DIU CSE Learning Platform",
+              "description": "Smart learning platform providing comprehensive educational resources including video lectures, slides, study tools, and course materials for Computer Science & Engineering students at Daffodil International University",
               "url": "https://diu-learning.vercel.app",
-              "logo": "https://diu-learning.vercel.app/images/diu-logo.png",
+              "logo": "https://diu-learning.vercel.app/images/studyhub_diu_Favicon .png",
+              "image": "https://diu-learning.vercel.app/images/studyhub_diu_Favicon .png",
               "sameAs": [
                 "https://daffodilvarsity.edu.bd",
                 "https://facebook.com/daffodilvarsity",
@@ -131,8 +136,50 @@ export default function RootLayout({
               "contactPoint": {
                 "@type": "ContactPoint",
                 "telephone": "+880-2-9138234",
-                "contactType": "customer service"
-              }
+                "contactType": "customer service",
+                "availableLanguage": ["en", "bn"]
+              },
+              "hasOfferCatalog": {
+                "@type": "OfferCatalog",
+                "name": "Educational Resources",
+                "itemListElement": [
+                  {
+                    "@type": "Offer",
+                    "itemOffered": {
+                      "@type": "Course",
+                      "name": "Computer Science & Engineering Courses",
+                      "description": "Comprehensive CSE course materials, video lectures, and study resources",
+                      "provider": {
+                        "@type": "EducationalOrganization",
+                        "name": "Daffodil International University"
+                      }
+                    }
+                  }
+                ]
+              },
+              "audience": {
+                "@type": "EducationalAudience",
+                "educationalRole": "student"
+              },
+              "keywords": "DIU, CSE, Computer Science, Engineering, Learning Platform, Video Lectures, Study Materials, Bangladesh University, Online Education, E-Learning"
+            })
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebSite",
+              "name": "StudyHub DIU Learning Platform",
+              "url": "https://diu-learning.vercel.app",
+              "potentialAction": {
+                "@type": "SearchAction",
+                "target": "https://diu-learning.vercel.app/?search={search_term_string}",
+                "query-input": "required name=search_term_string"
+              },
+              "inLanguage": "en",
+              "isAccessibleForFree": true
             })
           }}
         />

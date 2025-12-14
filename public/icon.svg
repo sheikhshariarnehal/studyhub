@@ -1,7 +1,0 @@
-<!-- Auto-created icon.svg - copied from placeholder-logo.svg to satisfy layout references -->
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
-  <rect width="512" height="512" rx="48" fill="#0ea5a4" />
-  <g fill="#fff" transform="translate(96 96)">
-    <path d="M64 32h160v32H64zM64 96h160v32H64zM64 160h160v32H64z"/>
-  </g>
-</svg>
