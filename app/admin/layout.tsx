@@ -4,7 +4,7 @@
 export const dynamic = 'force-dynamic'
 
 import React, { useEffect, useState } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { AdminSidebar } from "@/components/admin/admin-sidebar"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -16,6 +16,7 @@ import Link from "next/link"
 
 function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
   const { user, loading } = useAuth()
   const [showTimeout, setShowTimeout] = useState(false)
 
@@ -29,6 +30,13 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
 
     return () => clearTimeout(timer)
   }, [loading])
+
+  // Redirect to login if not authenticated (but not if already on login page)
+  useEffect(() => {
+    if (!loading && !user && pathname !== "/admin/login") {
+      router.push("/admin/login")
+    }
+  }, [user, loading, pathname, router])
 
   // If on login page, just render children without auth check
   if (pathname === "/admin/login") {
@@ -71,15 +79,12 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   }
 
   if (!user) {
-    // Redirect to admin login page
-    if (typeof window !== 'undefined') {
-      window.location.href = '/admin/login'
-    }
+    // Show loading state while redirecting
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="text-center space-y-4 max-w-md">
           <Loader2 className="h-8 w-8 animate-spin mx-auto" />
-          <p className="text-sm text-muted-foreground">Redirecting to login...</p>
+          <p className="text-sm text-muted-foreground">Loading...</p>
         </div>
       </div>
     )

@@ -41,24 +41,8 @@ export function middleware(request: NextRequest) {
   response.headers.set('x-timestamp', new Date().toISOString())
 
   // Allow access to login pages without authentication
-  // If already authenticated and trying to access login, redirect to admin dashboard
+  // Don't redirect authenticated users from login to prevent loops
   if (pathname === "/login" || pathname === "/admin/login") {
-    if (token) {
-      try {
-        // Verify token is valid
-        verifyJWT(token, JWT_SECRET)
-        // Token is valid, redirect to admin dashboard
-        if (process.env.NODE_ENV === 'development') {
-          console.log("Authenticated user accessing login page, redirecting to /admin")
-        }
-        return NextResponse.redirect(new URL("/admin", request.url))
-      } catch (error) {
-        // Invalid token, allow access to login page
-        if (process.env.NODE_ENV === 'development') {
-          console.log("Invalid token on login page, allowing access")
-        }
-      }
-    }
     if (process.env.NODE_ENV === 'development') {
       console.log("Allowing access to login page")
     }
