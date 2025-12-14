@@ -13,13 +13,16 @@ const nextConfig = {
   },
   // Enable experimental features for better performance
   experimental: {
-    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons', '@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-popover'],
   },
   // Compression and caching
   compress: true,
   poweredByHeader: false,
-  // Fix for Vercel deployment
+  // Optimized for Vercel deployment
   output: 'standalone',
+  // Production optimizations
+  productionBrowserSourceMaps: false,
+  reactStrictMode: true,
 
   async headers() {
     return [

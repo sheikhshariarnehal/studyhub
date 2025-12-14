@@ -1,9 +1,14 @@
 import type React from "react"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import { ThemeProvider } from "@/components/theme-provider"
 import "./globals.css"
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+}
 
 export const metadata: Metadata = {
   title: {
@@ -11,7 +16,6 @@ export const metadata: Metadata = {
     template: "%s | StudyHub DIU"
   },
   description: "StudyHub DIU: Your ultimate learning companion for Computer Science & Engineering at Daffodil International University. Access 1000+ video lectures, slides, study materials, notes, and interactive tools. Join thousands of students achieving academic excellence.",
-  viewport: "width=device-width, initial-scale=1",
   applicationName: "DIU Learning Platform",
   authors: [{ name: "DIU CSE Department" }],
   keywords: [
