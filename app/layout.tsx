@@ -97,8 +97,8 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="//youtube.com" />
 
   {/* App icons and manifest */}
-  <link rel="icon" href="/images/studyhub_diu_Favicon .png" type="image/png" />
-  <link rel="apple-touch-icon" href="/images/studyhub_diu_Favicon .png" />
+  <link rel="icon" href="/images/favicon2.png" type="image/png" />
+  <link rel="apple-touch-icon" href="/images/favicon2.png" />
         <link rel="manifest" href="/manifest.json" />
 
         {/* Theme colors */}

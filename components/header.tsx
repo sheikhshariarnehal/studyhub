@@ -84,11 +84,11 @@ export function Header({ className }: HeaderProps) {
               className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity group"
             >
               {/* Logo Icon */}
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-white border border-border/30 shadow-sm">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center flex-shrink-0">
                 <img
-                  src="/images/studyhub_diu_Favicon .png"
+                  src="/images/favicon.png"
                   alt="StudyHub DIU"
-                  className="w-full h-full object-contain p-1"
+                  className="w-full h-full object-cover brightness-0 invert dark:brightness-100 dark:invert-0"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement
                     target.style.display = 'none'
