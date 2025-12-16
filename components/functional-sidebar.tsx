@@ -428,10 +428,13 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
           setExpandedStudyTools(new Set())
           return new Set()
         } else {
-          // Batch reset and expand new
-          setExpandedTopics(new Set())
+          // Batch reset and expand new - auto-expand Topics section for better UX
           setExpandedTopicItems(new Set())
           setExpandedStudyTools(new Set())
+          // Auto-expand Topics section smoothly after a brief delay for animation
+          requestAnimationFrame(() => {
+            setExpandedTopics(new Set([courseId]))
+          })
           // Fetch data asynchronously
           queueMicrotask(() => fetchCourseData(courseId))
           return new Set([courseId])
@@ -1097,15 +1100,13 @@ const StudyToolsSection = memo<StudyToolsSectionProps>(({
     <div>
       <Button
         variant="ghost"
-        className={`w-full justify-start text-left ${isMobile ? 'p-2 h-auto hover:bg-accent/30 rounded-md' : 'px-2 py-1.5 h-auto hover:bg-accent rounded-md'}`}
+        className={`w-full justify-start text-left ${isMobile ? 'p-2 h-auto hover:bg-accent/30 rounded-md' : 'px-2 py-1.5 h-auto hover:bg-accent rounded-md'} transition-colors duration-200`}
         onClick={handleToggle}
       >
         <div className="flex items-center gap-2">
-          {isExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          ) : (
+          <div className={`transition-transform duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] ${isExpanded ? 'rotate-90' : 'rotate-0'}`}>
             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-          )}
+          </div>
           <BookOpen className="h-3.5 w-3.5 text-primary" />
           <span className="text-sm text-foreground flex-1">Study Resources</span>
           <span className="text-xs text-muted-foreground">{studyTools.length}</span>
@@ -1113,7 +1114,7 @@ const StudyToolsSection = memo<StudyToolsSectionProps>(({
       </Button>
 
       {isExpanded && (
-        <div className="ml-5 space-y-0.5 mt-0.5">
+        <div className="ml-5 space-y-0.5 mt-0.5 animate-expandIn origin-top">
           {studyTools.map((tool) => (
             <StudyToolItem
               key={tool.id}
@@ -1238,7 +1239,7 @@ const TopicsSection = memo<TopicsSectionProps>(({
       </Button>
 
       {isExpanded && (
-        <div className={`${isMobile ? 'ml-2 space-y-0.5 pr-0.5' : 'ml-2.5 space-y-0.5'} mt-1 min-w-0 border-l-2 border-primary/20 ${isMobile ? 'pl-2' : 'pl-2'} animate-slideDown`}>
+        <div className={`${isMobile ? 'ml-2 space-y-0.5 pr-0.5' : 'ml-2.5 space-y-0.5'} mt-1 min-w-0 border-l-2 border-primary/20 ${isMobile ? 'pl-2' : 'pl-2'} animate-expandIn origin-top`}>
           {topics.map((topic, index) => (
             <TopicItem
               key={topic.id}

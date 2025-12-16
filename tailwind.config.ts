@@ -85,11 +85,35 @@ const config: Config = {
   				to: {
   					height: '0'
   				}
+  			},
+  			'slideDown': {
+  				from: {
+  					opacity: '0',
+  					transform: 'translateY(-8px)'
+  				},
+  				to: {
+  					opacity: '1',
+  					transform: 'translateY(0)'
+  				}
+  			},
+  			'expandIn': {
+  				from: {
+  					opacity: '0',
+  					maxHeight: '0',
+  					transform: 'scaleY(0.95)'
+  				},
+  				to: {
+  					opacity: '1',
+  					maxHeight: '500px',
+  					transform: 'scaleY(1)'
+  				}
   			}
   		},
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
-  			'accordion-up': 'accordion-up 0.2s ease-out'
+  			'accordion-up': 'accordion-up 0.2s ease-out',
+  			'slideDown': 'slideDown 0.25s ease-out forwards',
+  			'expandIn': 'expandIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards'
   		}
   	}
   },

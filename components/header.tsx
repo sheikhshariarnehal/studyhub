@@ -46,7 +46,7 @@ export function Header({ className }: HeaderProps) {
   }
 
   const navigationItems = [
-    { name: "Home", href: "/", icon: BookOpen, primary: false },
+    { name: "Study", href: "/", icon: BookOpen, primary: true },
     { name: "Notes", href: "/notes", icon: GraduationCap, primary: false },
     { name: "Contributor", href: "/contributor", primary: false },
     { name: "Result", href: "/result", primary: false },
