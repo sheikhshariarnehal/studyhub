@@ -1240,7 +1240,7 @@ const TopicsSection = memo<TopicsSectionProps>(({
       </Button>
 
       {isExpanded && (
-        <div className={`${isMobile ? 'ml-2 space-y-1 pr-1' : 'ml-3 space-y-0.5'} mt-1 min-w-0 border-l border-border/30 ${isMobile ? 'pl-1.5' : 'pl-2'}`}>
+        <div className={`${isMobile ? 'ml-2 space-y-0.5 pr-0.5' : 'ml-2.5 space-y-0.5'} mt-1 min-w-0 border-l-2 border-primary/20 ${isMobile ? 'pl-2' : 'pl-2'}`}>
           {topics.map((topic, index) => (
             <TopicItem
               key={topic.id}
@@ -1305,28 +1305,28 @@ const TopicItem = memo<TopicItemProps>(({
     <div className="min-w-0 relative">
       <Button
         variant="ghost"
-        className={`w-full justify-start text-left ${isMobile ? 'px-2 py-2 min-h-[40px]' : 'px-2.5 py-2'} h-auto min-w-0 rounded-lg transition-colors duration-150 group ${
+        className={`w-full justify-start text-left ${isMobile ? 'px-2 py-1.5 min-h-[36px]' : 'px-2 py-1.5'} h-auto min-w-0 rounded-md transition-all duration-150 group ${
           isExpanded
-            ? 'bg-gradient-to-r from-primary/15 to-primary/8 border-l-[3px] border-primary shadow-sm'
-            : 'hover:bg-accent/60 border-l-[3px] border-transparent hover:border-primary/40'
+            ? 'bg-primary/8 dark:bg-primary/15'
+            : 'hover:bg-accent/60'
         }`}
         onClick={handleToggle}
       >
-        <div className={`flex items-center ${isMobile ? 'gap-2' : 'gap-2.5'} w-full min-w-0`}>
-          <div className={`transition-transform duration-150 ease-out transform-gpu ${isExpanded ? 'rotate-90' : 'rotate-0'}`}>
-            <ChevronRight className={`${isMobile ? 'h-3.5 w-3.5' : 'h-4 w-4'} flex-shrink-0 transition-colors duration-150 ${
-              isExpanded ? 'text-primary' : 'text-muted-foreground'
+        <div className={`flex items-center gap-2 w-full min-w-0`}>
+          <div className={`transition-transform duration-150 ease-out ${isExpanded ? 'rotate-90' : 'rotate-0'}`}>
+            <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 ${
+              isExpanded ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'
             }`} />
           </div>
-          <div className={`flex items-center ${isMobile ? 'gap-1.5' : 'gap-2'} flex-1 min-w-0`}>
-            <div className={`flex-shrink-0 ${isMobile ? 'w-4 h-4 text-[9px]' : 'w-5 h-5 text-[10px]'} rounded flex items-center justify-center font-semibold transition-colors duration-150 ${
+          <div className={`flex items-center gap-2 flex-1 min-w-0`}>
+            <div className={`flex-shrink-0 w-5 h-5 text-[10px] rounded-md flex items-center justify-center font-bold transition-colors ${
               isExpanded 
-                ? "bg-primary text-primary-foreground shadow-sm" 
-                : "bg-muted text-muted-foreground group-hover:bg-primary/20 group-hover:text-primary"
+                ? "bg-primary text-primary-foreground" 
+                : "bg-muted/70 text-muted-foreground group-hover:bg-primary/20 group-hover:text-primary"
             }`}>
               {index + 1}
             </div>
-            <span className={`${isMobile ? 'text-[11px] leading-tight' : 'text-xs'} break-words line-clamp-2 min-w-0 flex-1 transition-colors duration-150 ${
+            <span className={`text-[12px] leading-snug break-words line-clamp-2 min-w-0 flex-1 transition-colors ${
               isExpanded ? "text-primary font-semibold" : "text-foreground font-medium group-hover:text-primary"
             }`}>
               {topic.title}
@@ -1336,7 +1336,7 @@ const TopicItem = memo<TopicItemProps>(({
       </Button>
 
       {isExpanded && (
-        <div className={`${isMobile ? 'ml-3 mr-0' : 'ml-6 mr-0.5'} space-y-0.5 mt-1 mb-1 min-w-0 border-l border-border/20 ${isMobile ? 'pl-1.5' : 'pl-2'}`}>
+        <div className={`${isMobile ? 'ml-5' : 'ml-6'} space-y-0.5 mt-1 mb-1 min-w-0 border-l-2 border-border/30 pl-2`}>
           {videos.map((video) => (
             <ContentItemButton
               key={video.id}
@@ -1370,11 +1370,9 @@ const TopicItem = memo<TopicItemProps>(({
             />
           ))}
           {slides.length === 0 && videos.length === 0 && (
-            <div className="text-center py-5 px-3">
-              <div className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-muted/50 mb-2">
-                <FileText className="h-4 w-4 text-muted-foreground/50" />
-              </div>
-              <div className="text-xs text-muted-foreground/70 font-medium">No content available</div>
+            <div className="text-center py-3 px-2">
+              <FileText className="h-4 w-4 text-muted-foreground/40 mx-auto mb-1" />
+              <div className="text-[11px] text-muted-foreground/60">No content available</div>
             </div>
           )}
         </div>
@@ -1423,40 +1421,34 @@ const ContentItemButton = memo<ContentItemButtonProps>(({
     <Button
       variant="ghost"
       data-content-id={id}
-      className={`w-full justify-start text-left ${isMobile ? 'px-2 py-2 min-h-[36px]' : 'px-2.5 py-2'} h-auto rounded-lg min-w-0 transition-colors duration-150 group ${
+      className={`w-full justify-start text-left ${isMobile ? 'px-2 py-1.5 min-h-[32px]' : 'px-2 py-1.5'} h-auto rounded-md min-w-0 transition-all duration-150 group ${
         isSelected
           ? isVideo 
-            ? "bg-gradient-to-r from-red-50/50 to-red-50/30 dark:from-red-500/15 dark:to-red-500/10 border-l-[3px] border-red-500 shadow-sm"
-            : "bg-gradient-to-r from-blue-50/50 to-blue-50/30 dark:from-blue-500/15 dark:to-blue-500/10 border-l-[3px] border-blue-500 shadow-sm"
-          : isVideo
-            ? "hover:bg-accent/50 border-l-[3px] border-transparent hover:border-red-400/40"
-            : "hover:bg-accent/50 border-l-[3px] border-transparent hover:border-blue-400/40"
+            ? "bg-red-500/10 dark:bg-red-500/20"
+            : "bg-blue-500/10 dark:bg-blue-500/20"
+          : "hover:bg-accent/50"
       }`}
       onClick={handleClick}
     >
-      <div className={`flex items-center ${isMobile ? 'gap-1.5' : 'gap-2'} w-full min-w-0`}>
-        <div className={`${isMobile ? 'p-0.5' : 'p-1'} rounded-md transition-colors duration-150 ${
+      <div className={`flex items-center gap-2 w-full min-w-0`}>
+        <div className={`flex-shrink-0 p-1 rounded transition-colors ${
           isSelected 
-            ? isVideo ? "bg-red-500/20" : "bg-blue-500/20"
-            : isVideo ? "bg-red-500/10 group-hover:bg-red-500/15" : "bg-blue-500/10 group-hover:bg-blue-500/15"
+            ? isVideo ? "bg-red-500/15 text-red-500" : "bg-blue-500/15 text-blue-500"
+            : isVideo ? "text-red-400/80 group-hover:text-red-500" : "text-blue-400/80 group-hover:text-blue-500"
         }`}>
           {isVideo ? (
-            <Play className={`${isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5'} flex-shrink-0 transition-colors ${
-              isSelected ? "text-red-600 dark:text-red-400" : "text-red-500 group-hover:text-red-600"
-            }`} />
+            <Play className="h-3 w-3 flex-shrink-0" />
           ) : (
-            <FileText className={`${isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5'} flex-shrink-0 transition-colors ${
-              isSelected ? "text-blue-600 dark:text-blue-400" : "text-blue-500 group-hover:text-blue-600"
-            }`} />
+            <FileText className="h-3 w-3 flex-shrink-0" />
           )}
         </div>
-        <span className={`${isMobile ? 'text-[11px] leading-snug' : 'text-xs leading-relaxed'} break-words min-w-0 flex-1 line-clamp-2 transition-colors duration-150 ${
+        <span className={`text-[11px] leading-snug break-words min-w-0 flex-1 line-clamp-2 transition-colors ${
           isSelected ? "font-semibold text-foreground" : "text-muted-foreground font-medium group-hover:text-foreground"
         }`}>
           {title}
         </span>
         {isSelected && (
-          <div className={`flex-shrink-0 ${isMobile ? 'w-1 h-1' : 'w-1.5 h-1.5'} ${isVideo ? 'bg-red-500' : 'bg-blue-500'} rounded-full`} />
+          <div className={`flex-shrink-0 w-1.5 h-1.5 ${isVideo ? 'bg-red-500' : 'bg-blue-500'} rounded-full`} />
         )}
       </div>
     </Button>
