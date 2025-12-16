@@ -296,6 +296,47 @@
   will-change: transform, background-color;
 }
 
+/* Smooth slide down animation - Used for all expand/collapse */
+.animate-slideDown {
+  animation: smoothSlideDown 0.2s ease-out forwards;
+  transform-origin: top center;
+}
+
+@keyframes smoothSlideDown {
+  0% {
+    opacity: 0;
+    transform: scaleY(0.95) translateY(-4px);
+  }
+  100% {
+    opacity: 1;
+    transform: scaleY(1) translateY(0);
+  }
+}
+
+/* Smooth fade in for individual items */
+.animate-slideDown > * {
+  animation: smoothFadeIn 0.15s ease-out forwards;
+  animation-fill-mode: both;
+}
+
+.animate-slideDown > *:nth-child(1) { animation-delay: 0.02s; }
+.animate-slideDown > *:nth-child(2) { animation-delay: 0.04s; }
+.animate-slideDown > *:nth-child(3) { animation-delay: 0.06s; }
+.animate-slideDown > *:nth-child(4) { animation-delay: 0.08s; }
+.animate-slideDown > *:nth-child(5) { animation-delay: 0.1s; }
+.animate-slideDown > *:nth-child(n+6) { animation-delay: 0.12s; }
+
+@keyframes smoothFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 /* Course content expansion animation - GPU accelerated */
 .course-expand-enter {
   animation: courseExpand 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;

@@ -1224,15 +1224,13 @@ const TopicsSection = memo<TopicsSectionProps>(({
     <div className="min-w-0">
       <Button
         variant="ghost"
-        className={`w-full justify-start text-left ${isMobile ? 'p-2 h-auto hover:bg-accent/30 rounded-md' : 'px-2 py-1.5 h-auto hover:bg-accent rounded-md'} touch-manipulation`}
+        className={`w-full justify-start text-left ${isMobile ? 'p-2 h-auto hover:bg-accent/30 rounded-md' : 'px-2 py-1.5 h-auto hover:bg-accent rounded-md'} touch-manipulation transition-colors duration-200`}
         onClick={handleToggle}
       >
         <div className="flex items-center gap-2">
-          {isExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          ) : (
+          <div className={`transition-transform duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] ${isExpanded ? 'rotate-90' : 'rotate-0'}`}>
             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-          )}
+          </div>
           <FileText className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="text-sm text-foreground flex-1">Topics</span>
           <span className="text-xs text-muted-foreground">{topics.length}</span>
@@ -1240,7 +1238,7 @@ const TopicsSection = memo<TopicsSectionProps>(({
       </Button>
 
       {isExpanded && (
-        <div className={`${isMobile ? 'ml-2 space-y-0.5 pr-0.5' : 'ml-2.5 space-y-0.5'} mt-1 min-w-0 border-l-2 border-primary/20 ${isMobile ? 'pl-2' : 'pl-2'}`}>
+        <div className={`${isMobile ? 'ml-2 space-y-0.5 pr-0.5' : 'ml-2.5 space-y-0.5'} mt-1 min-w-0 border-l-2 border-primary/20 ${isMobile ? 'pl-2' : 'pl-2'} animate-slideDown`}>
           {topics.map((topic, index) => (
             <TopicItem
               key={topic.id}
@@ -1305,7 +1303,7 @@ const TopicItem = memo<TopicItemProps>(({
     <div className="min-w-0 relative">
       <Button
         variant="ghost"
-        className={`w-full justify-start text-left ${isMobile ? 'px-2 py-1.5 min-h-[36px]' : 'px-2 py-1.5'} h-auto min-w-0 rounded-md transition-all duration-150 group ${
+        className={`w-full justify-start text-left ${isMobile ? 'px-2 py-1.5 min-h-[36px]' : 'px-2 py-1.5'} h-auto min-w-0 rounded-md transition-all duration-200 group ${
           isExpanded
             ? 'bg-primary/8 dark:bg-primary/15'
             : 'hover:bg-accent/60'
@@ -1313,8 +1311,8 @@ const TopicItem = memo<TopicItemProps>(({
         onClick={handleToggle}
       >
         <div className={`flex items-center gap-2 w-full min-w-0`}>
-          <div className={`transition-transform duration-150 ease-out ${isExpanded ? 'rotate-90' : 'rotate-0'}`}>
-            <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 ${
+          <div className={`transition-transform duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] ${isExpanded ? 'rotate-90' : 'rotate-0'}`}>
+            <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 transition-colors duration-200 ${
               isExpanded ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'
             }`} />
           </div>
@@ -1336,7 +1334,7 @@ const TopicItem = memo<TopicItemProps>(({
       </Button>
 
       {isExpanded && (
-        <div className={`${isMobile ? 'ml-5' : 'ml-6'} space-y-0.5 mt-1 mb-1 min-w-0 border-l-2 border-border/30 pl-2`}>
+        <div className={`${isMobile ? 'ml-5' : 'ml-6'} space-y-0.5 mt-1 mb-1 min-w-0 border-l-2 border-border/30 pl-2 animate-slideDown`}>
           {videos.map((video) => (
             <ContentItemButton
               key={video.id}
