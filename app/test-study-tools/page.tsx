@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { FileText, BookOpen, Users, CheckCircle, XCircle } from "lucide-react"
+import { FileText, BookOpen, Users, CheckCircle, XCircle, BarChart3 } from "lucide-react"
 
 export default function TestStudyToolsPage() {
   const [selectedType, setSelectedType] = useState("previous_questions")
@@ -90,7 +90,7 @@ export default function TestStudyToolsPage() {
       case "syllabus":
         return <FileText className="h-5 w-5 text-purple-500" />
       case "mark_distribution":
-        return <Users className="h-5 w-5 text-orange-500" />
+        return <BarChart3 className="h-5 w-5 text-orange-500" />
       default:
         return <FileText className="h-5 w-5" />
     }

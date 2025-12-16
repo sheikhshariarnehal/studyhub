@@ -185,6 +185,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
+// Helper function to check if two objects have the same relevant fields
+function hasChanges(existing: any, updated: any, fields: string[]): boolean {
+  for (const field of fields) {
+    const existingVal = existing[field] ?? null
+    const updatedVal = updated[field] ?? null
+    if (existingVal !== updatedVal) {
+      return true
+    }
+  }
+  return false
+}
+
 /* --------------------------------  PUT  ---------------------------------- */
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -193,7 +205,6 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const db = createDB()
 
     console.log("Updating semester with ID:", id)
-    console.log("Received data:", JSON.stringify(data, null, 2))
 
     // Validate required fields
     if (!data.semester?.title || !data.semester?.section) {
@@ -203,10 +214,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       )
     }
 
-    // Check if semester exists
+    // Fetch existing semester with all related data for comparison
     const { data: existingSemester, error: checkError } = await db
       .from("semesters")
-      .select("id")
+      .select("*")
       .eq("id", id)
       .single()
 
@@ -217,34 +228,49 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       )
     }
 
-    // Update semester (only fields that exist in database)
-    const semesterUpdate = {
+    // Check if semester fields actually changed
+    const semesterFields = ['title', 'description', 'section', 'has_midterm', 'has_final', 'start_date', 'end_date']
+    const semesterNeedsUpdate = hasChanges(existingSemester, {
       title: data.semester.title,
       description: data.semester.description || null,
       section: data.semester.section,
       has_midterm: data.semester.has_midterm ?? true,
       has_final: data.semester.has_final ?? true,
       start_date: data.semester.start_date || null,
-      end_date: data.semester.end_date || null,
-      updated_at: new Date().toISOString()
-    }
+      end_date: data.semester.end_date || null
+    }, semesterFields)
 
-    console.log("Updating semester with:", semesterUpdate)
+    if (semesterNeedsUpdate) {
+      const semesterUpdate = {
+        title: data.semester.title,
+        description: data.semester.description || null,
+        section: data.semester.section,
+        has_midterm: data.semester.has_midterm ?? true,
+        has_final: data.semester.has_final ?? true,
+        start_date: data.semester.start_date || null,
+        end_date: data.semester.end_date || null,
+        updated_at: new Date().toISOString()
+      }
 
-    const { error: semesterError } = await db
-      .from("semesters")
-      .update(semesterUpdate)
-      .eq("id", id)
+      console.log("Updating semester with:", semesterUpdate)
 
-    if (semesterError) {
-      console.error("Semester update error:", semesterError)
-      throw semesterError
+      const { error: semesterError } = await db
+        .from("semesters")
+        .update(semesterUpdate)
+        .eq("id", id)
+
+      if (semesterError) {
+        console.error("Semester update error:", semesterError)
+        throw semesterError
+      }
+    } else {
+      console.log("Semester unchanged, skipping update")
     }
 
     // Get existing courses to determine what to update/delete/create
     const { data: existingCourses, error: existingCoursesError } = await db
       .from("courses")
-      .select("id")
+      .select("*")
       .eq("semester_id", id)
 
     if (existingCoursesError) {
@@ -252,6 +278,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       throw existingCoursesError
     }
 
+    const existingCourseMap = new Map((existingCourses || []).map(c => [c.id, c]))
     const existingCourseIds = new Set((existingCourses || []).map(c => c.id))
     const updatedCourseIds = new Set((data.courses || []).filter(c => c.id).map(c => c.id))
 
@@ -279,29 +306,45 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
       let courseId = course.id
 
-      if (courseId) {
-        // Update existing course
-        const courseUpdate = {
+      if (courseId && existingCourseMap.has(courseId)) {
+        // Check if course actually changed
+        const existingCourse = existingCourseMap.get(courseId)
+        const courseFields = ['title', 'course_code', 'teacher_name', 'teacher_email', 'credits', 'description', 'is_highlighted']
+        const courseNeedsUpdate = hasChanges(existingCourse, {
           title: course.title,
           course_code: course.course_code,
           teacher_name: course.teacher_name,
           teacher_email: course.teacher_email || null,
           credits: course.credits || 3,
           description: course.description || null,
-          is_highlighted: course.is_highlighted || false,
-          updated_at: new Date().toISOString()
-        }
+          is_highlighted: course.is_highlighted || false
+        }, courseFields)
 
-        console.log("Updating course:", courseId, courseUpdate)
+        if (courseNeedsUpdate) {
+          const courseUpdate = {
+            title: course.title,
+            course_code: course.course_code,
+            teacher_name: course.teacher_name,
+            teacher_email: course.teacher_email || null,
+            credits: course.credits || 3,
+            description: course.description || null,
+            is_highlighted: course.is_highlighted || false,
+            updated_at: new Date().toISOString()
+          }
 
-        const { error: courseError } = await db
-          .from("courses")
-          .update(courseUpdate)
-          .eq("id", courseId)
+          console.log("Updating course:", courseId)
 
-        if (courseError) {
-          console.error("Course update error:", courseError)
-          throw courseError
+          const { error: courseError } = await db
+            .from("courses")
+            .update(courseUpdate)
+            .eq("id", courseId)
+
+          if (courseError) {
+            console.error("Course update error:", courseError)
+            throw courseError
+          }
+        } else {
+          console.log("Course unchanged, skipping:", courseId)
         }
       } else {
         // Create new course
@@ -331,10 +374,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         courseId = newCourse.id
       }
 
-      // Handle topics (similar logic for update/delete/create)
+      // Handle topics with differential updates
       const { data: existingTopics, error: existingTopicsError } = await db
         .from("topics")
-        .select("id")
+        .select("*")
         .eq("course_id", courseId)
 
       if (existingTopicsError) {
@@ -342,6 +385,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         throw existingTopicsError
       }
 
+      const existingTopicMap = new Map((existingTopics || []).map(t => [t.id, t]))
       const existingTopicIds = new Set((existingTopics || []).map(t => t.id))
       const updatedTopicIds = new Set((course.topics || []).filter(t => t.id).map(t => t.id))
 
@@ -360,7 +404,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         }
       }
 
-      // Process topics
+      // Process topics with differential updates
       for (let topicIndex = 0; topicIndex < (course.topics || []).length; topicIndex++) {
         const topic = course.topics[topicIndex]
 
@@ -371,25 +415,37 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
         let topicId = topic.id
 
-        if (topicId) {
-          // Update existing topic
-          const topicUpdate = {
+        if (topicId && existingTopicMap.has(topicId)) {
+          // Check if topic actually changed
+          const existingTopic = existingTopicMap.get(topicId)
+          const topicFields = ['title', 'description', 'order_index']
+          const topicNeedsUpdate = hasChanges(existingTopic, {
             title: topic.title,
             description: topic.description || null,
-            order_index: topicIndex,
-            updated_at: new Date().toISOString()
-          }
+            order_index: topicIndex
+          }, topicFields)
 
-          console.log("Updating topic:", topicId, topicUpdate)
+          if (topicNeedsUpdate) {
+            const topicUpdate = {
+              title: topic.title,
+              description: topic.description || null,
+              order_index: topicIndex,
+              updated_at: new Date().toISOString()
+            }
 
-          const { error: topicError } = await db
-            .from("topics")
-            .update(topicUpdate)
-            .eq("id", topicId)
+            console.log("Updating topic:", topicId)
 
-          if (topicError) {
-            console.error("Topic update error:", topicError)
-            throw topicError
+            const { error: topicError } = await db
+              .from("topics")
+              .update(topicUpdate)
+              .eq("id", topicId)
+
+            if (topicError) {
+              console.error("Topic update error:", topicError)
+              throw topicError
+            }
+          } else {
+            console.log("Topic unchanged, skipping:", topicId)
           }
         } else {
           // Create new topic
@@ -415,123 +471,199 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           topicId = newTopic.id
         }
 
-        // Handle slides and videos (delete all and recreate for simplicity)
-        console.log("Deleting existing slides and videos for topic:", topicId)
+        // Handle slides with differential updates - only update what changed
+        const { data: existingSlides, error: existingSlidesError } = await db
+          .from("slides")
+          .select("*")
+          .eq("topic_id", topicId)
+          .order("order_index", { ascending: true })
 
-        const [slidesDeleteResult, videosDeleteResult] = await Promise.all([
-          db.from("slides").delete().eq("topic_id", topicId),
-          db.from("videos").delete().eq("topic_id", topicId)
-        ])
-
-        if (slidesDeleteResult.error) {
-          console.error("Error deleting slides:", slidesDeleteResult.error)
-          throw slidesDeleteResult.error
+        if (existingSlidesError) {
+          console.error("Error fetching existing slides:", existingSlidesError)
+          throw existingSlidesError
         }
 
-        if (videosDeleteResult.error) {
-          console.error("Error deleting videos:", videosDeleteResult.error)
-          throw videosDeleteResult.error
+        const existingSlideMap = new Map((existingSlides || []).map(s => [s.id, s]))
+        const existingSlideIds = new Set((existingSlides || []).map(s => s.id))
+        const updatedSlideIds = new Set((topic.slides || []).filter(s => s.id).map(s => s.id))
+
+        // Delete slides that are no longer in the update
+        const slidesToDelete = Array.from(existingSlideIds).filter(slideId => !updatedSlideIds.has(slideId))
+        if (slidesToDelete.length > 0) {
+          console.log("Deleting slides:", slidesToDelete)
+          await db.from("slides").delete().in("id", slidesToDelete)
         }
 
-        // Create new slides
-        if (topic.slides && topic.slides.length > 0) {
-          const slidesToInsert = topic.slides
-            .filter(slide => slide.title && slide.url)
-            .map((slide, index) => ({
+        // Process slides - update existing or create new
+        for (let slideIndex = 0; slideIndex < (topic.slides || []).length; slideIndex++) {
+          const slide = topic.slides[slideIndex]
+          if (!slide.title || !slide.url) continue
+
+          if (slide.id && existingSlideMap.has(slide.id)) {
+            // Check if slide actually changed
+            const existingSlide = existingSlideMap.get(slide.id)
+            const slideNeedsUpdate = hasChanges(existingSlide, {
+              title: slide.title,
+              google_drive_url: slide.url,
+              description: slide.description || null,
+              order_index: slideIndex
+            }, ['title', 'google_drive_url', 'description', 'order_index'])
+
+            if (slideNeedsUpdate) {
+              console.log("Updating slide:", slide.id)
+              await db.from("slides").update({
+                title: slide.title,
+                google_drive_url: slide.url,
+                description: slide.description || null,
+                order_index: slideIndex,
+                updated_at: new Date().toISOString()
+              }).eq("id", slide.id)
+            }
+          } else {
+            // Create new slide
+            console.log("Creating new slide:", slide.title)
+            await db.from("slides").insert([{
               title: slide.title,
               google_drive_url: slide.url,
               description: slide.description || null,
               topic_id: topicId,
-              order_index: index
-            }))
-
-          if (slidesToInsert.length > 0) {
-            console.log("Inserting slides:", slidesToInsert)
-            const { error: slidesError } = await db
-              .from("slides")
-              .insert(slidesToInsert)
-
-            if (slidesError) {
-              console.error("Slides insertion error:", slidesError)
-              throw slidesError
-            }
+              order_index: slideIndex
+            }])
           }
         }
 
-        // Create new videos
-        if (topic.videos && topic.videos.length > 0) {
-          const videosToInsert = topic.videos
-            .filter(video => video.title && video.url)
-            .map((video, index) => ({
+        // Handle videos with differential updates
+        const { data: existingVideos, error: existingVideosError } = await db
+          .from("videos")
+          .select("*")
+          .eq("topic_id", topicId)
+          .order("order_index", { ascending: true })
+
+        if (existingVideosError) {
+          console.error("Error fetching existing videos:", existingVideosError)
+          throw existingVideosError
+        }
+
+        const existingVideoMap = new Map((existingVideos || []).map(v => [v.id, v]))
+        const existingVideoIds = new Set((existingVideos || []).map(v => v.id))
+        const updatedVideoIds = new Set((topic.videos || []).filter(v => v.id).map(v => v.id))
+
+        // Delete videos that are no longer in the update
+        const videosToDelete = Array.from(existingVideoIds).filter(videoId => !updatedVideoIds.has(videoId))
+        if (videosToDelete.length > 0) {
+          console.log("Deleting videos:", videosToDelete)
+          await db.from("videos").delete().in("id", videosToDelete)
+        }
+
+        // Process videos - update existing or create new
+        for (let videoIndex = 0; videoIndex < (topic.videos || []).length; videoIndex++) {
+          const video = topic.videos[videoIndex]
+          if (!video.title || !video.url) continue
+
+          if (video.id && existingVideoMap.has(video.id)) {
+            // Check if video actually changed
+            const existingVideo = existingVideoMap.get(video.id)
+            const videoNeedsUpdate = hasChanges(existingVideo, {
+              title: video.title,
+              youtube_url: video.url,
+              description: video.description || null,
+              order_index: videoIndex
+            }, ['title', 'youtube_url', 'description', 'order_index'])
+
+            if (videoNeedsUpdate) {
+              console.log("Updating video:", video.id)
+              await db.from("videos").update({
+                title: video.title,
+                youtube_url: video.url,
+                description: video.description || null,
+                order_index: videoIndex,
+                updated_at: new Date().toISOString()
+              }).eq("id", video.id)
+            }
+          } else {
+            // Create new video
+            console.log("Creating new video:", video.title)
+            await db.from("videos").insert([{
               title: video.title,
               youtube_url: video.url,
               description: video.description || null,
               topic_id: topicId,
-              order_index: index
-            }))
-
-          if (videosToInsert.length > 0) {
-            console.log("Inserting videos:", videosToInsert)
-            const { error: videosError } = await db
-              .from("videos")
-              .insert(videosToInsert)
-
-            if (videosError) {
-              console.error("Videos insertion error:", videosError)
-              throw videosError
-            }
+              order_index: videoIndex
+            }])
           }
         }
       }
 
-      // Handle study tools (delete all and recreate)
-      console.log("Deleting existing study tools for course:", courseId)
-
-      const { error: deleteStudyToolsError } = await db
+      // Handle study tools with differential updates
+      const { data: existingStudyTools, error: existingStudyToolsError } = await db
         .from("study_tools")
-        .delete()
+        .select("*")
         .eq("course_id", courseId)
 
-      if (deleteStudyToolsError) {
-        console.error("Error deleting study tools:", deleteStudyToolsError)
-        throw deleteStudyToolsError
+      if (existingStudyToolsError) {
+        console.error("Error fetching existing study tools:", existingStudyToolsError)
+        throw existingStudyToolsError
       }
 
-      if (course.studyTools && course.studyTools.length > 0) {
-        const studyToolsToInsert = course.studyTools
-          .filter(tool => tool.title && tool.type && tool.exam_type)
-          .map(tool => {
+      const existingToolMap = new Map((existingStudyTools || []).map(t => [t.id, t]))
+      const existingToolIds = new Set((existingStudyTools || []).map(t => t.id))
+      const updatedToolIds = new Set((course.studyTools || []).filter(t => t.id).map(t => t.id))
+
+      // Delete study tools that are no longer in the update
+      const toolsToDelete = Array.from(existingToolIds).filter(toolId => !updatedToolIds.has(toolId))
+      if (toolsToDelete.length > 0) {
+        console.log("Deleting study tools:", toolsToDelete)
+        await db.from("study_tools").delete().in("id", toolsToDelete)
+      }
+
+      // Process study tools - update existing or create new
+      for (const tool of (course.studyTools || [])) {
+        if (!tool.title || !tool.type) continue
+
+        if (tool.id && existingToolMap.has(tool.id)) {
+          // Check if study tool actually changed
+          const existingTool = existingToolMap.get(tool.id)
+          const toolNeedsUpdate = hasChanges(existingTool, {
+            title: tool.title,
+            type: tool.type,
+            content_url: tool.content_url || null,
+            exam_type: tool.exam_type,
+            description: tool.description || null
+          }, ['title', 'type', 'content_url', 'exam_type', 'description'])
+
+          if (toolNeedsUpdate) {
+            console.log("Updating study tool:", tool.id)
             const toolData: any = {
               title: tool.title,
               type: tool.type,
               content_url: tool.content_url || null,
-              course_id: courseId,
-              exam_type: tool.exam_type
+              exam_type: tool.exam_type,
+              updated_at: new Date().toISOString()
             }
-
-            // Only add description if it has a value
             if (tool.description) {
               toolData.description = tool.description
             }
-
-            return toolData
-          })
-
-        if (studyToolsToInsert.length > 0) {
-          console.log("Inserting study tools:", studyToolsToInsert)
-          const { error: studyToolsError } = await db
-            .from("study_tools")
-            .insert(studyToolsToInsert)
-
-          if (studyToolsError) {
-            console.error("Study tools insertion error:", studyToolsError)
-            throw studyToolsError
+            await db.from("study_tools").update(toolData).eq("id", tool.id)
           }
+        } else {
+          // Create new study tool
+          console.log("Creating new study tool:", tool.title)
+          const toolData: any = {
+            title: tool.title,
+            type: tool.type,
+            content_url: tool.content_url || null,
+            course_id: courseId,
+            exam_type: tool.exam_type
+          }
+          if (tool.description) {
+            toolData.description = tool.description
+          }
+          await db.from("study_tools").insert([toolData])
         }
       }
     }
 
-    console.log("Successfully updated semester and all content")
+    console.log("Successfully updated semester (optimized - only changed items)")
 
     return NextResponse.json({
       success: true,

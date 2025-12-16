@@ -46,7 +46,11 @@ import {
   ChevronUp,
   AlertCircle,
   CheckCircle,
-  RefreshCw
+  RefreshCw,
+  BarChart3,
+  GraduationCap,
+  ExternalLink,
+  Link as LinkIcon
 } from "lucide-react"
 
 // Interfaces (same as create page)
@@ -113,11 +117,16 @@ function StudyToolCard({ tool, toolIndex, courseIndex, isExpanded, onToggle, onR
 
   const getToolIcon = (type: string) => {
     switch(type) {
-      case 'previous_questions': return '📝'
-      case 'exam_note': return '📚'
-      case 'syllabus': return '📋'
-      case 'mark_distribution': return '📊'
-      default: return '📄'
+      case 'previous_questions': 
+        return <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+      case 'exam_note': 
+        return <BookOpen className="h-4 w-4 text-green-600 dark:text-green-400" />
+      case 'syllabus': 
+        return <GraduationCap className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+      case 'mark_distribution': 
+        return <BarChart3 className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+      default: 
+        return <FileText className="h-4 w-4 text-gray-500 dark:text-gray-400" />
     }
   }
 
@@ -131,117 +140,233 @@ function StudyToolCard({ tool, toolIndex, courseIndex, isExpanded, onToggle, onR
     }
   }
 
+  const getToolColor = (type: string) => {
+    switch(type) {
+      case 'previous_questions': return 'blue'
+      case 'exam_note': return 'green'
+      case 'syllabus': return 'purple'
+      case 'mark_distribution': return 'orange'
+      default: return 'gray'
+    }
+  }
+
+  const color = getToolColor(tool.type)
+  const isSyllabus = tool.type === 'syllabus'
+
   return (
-    <Card ref={setNodeRef} style={style} className={`border-l-4 ${isDragging ? 'border-l-blue-500 shadow-xl' : 'border-l-blue-400 dark:border-l-blue-600'} shadow-sm`}>
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-3">
-          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-2 hover:bg-accent rounded-md transition-colors flex-shrink-0">
-            <GripVertical className="h-5 w-5 text-muted-foreground" />
-          </div>
+    <Card 
+      ref={setNodeRef} 
+      style={style} 
+      className={`group border-l-4 ${
+        isDragging 
+          ? 'border-l-blue-500 shadow-2xl scale-[1.02]' 
+          : `border-l-${color}-400 dark:border-l-${color}-600 hover:shadow-md`
+      } transition-all duration-200`}
+    >
+      <CardHeader className="pb-3 pt-3">
+        <div className="flex items-center gap-2">
           <div 
-            className="flex-1 flex items-center justify-between cursor-pointer hover:bg-accent/50 -m-2 p-2 rounded-md transition-colors min-w-0"
+            {...attributes} 
+            {...listeners} 
+            className="cursor-grab active:cursor-grabbing p-1.5 hover:bg-accent rounded transition-colors flex-shrink-0 group-hover:bg-accent/50"
+          >
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
+          </div>
+          
+          <div 
+            className="flex-1 flex items-center gap-3 cursor-pointer hover:bg-accent/30 -mx-1 px-1 py-1.5 rounded transition-colors min-w-0"
             onClick={onToggle}
           >
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <span className="text-2xl flex-shrink-0">{getToolIcon(tool.type)}</span>
+            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+              <div className={`p-1.5 rounded-lg bg-${color}-100 dark:bg-${color}-950/30 flex-shrink-0`}>
+                {getToolIcon(tool.type)}
+              </div>
+              
               <div className="flex-1 min-w-0">
-                <div className="font-semibold text-base truncate">
-                  {tool.title || "Untitled Tool"}
+                <div className="font-semibold text-sm truncate mb-0.5">
+                  {tool.title || <span className="text-muted-foreground italic">Untitled Tool</span>}
                 </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                  <span>{getToolTypeLabel(tool.type)}</span>
-                  {tool.exam_type && (
-                    <>
-                      <span>•</span>
-                      <span className="capitalize">{tool.exam_type}</span>
-                    </>
-                  )}
-                </div>
+                
+                <Badge 
+                  variant="outline" 
+                  className={`text-xs px-2 py-0 h-5 border-${color}-300 dark:border-${color}-700 text-${color}-700 dark:text-${color}-300`}
+                >
+                  {getToolTypeLabel(tool.type)}
+                </Badge>
               </div>
+              
+              {!isSyllabus && tool.content_url && (
+                <a 
+                  href={tool.content_url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex-shrink-0"
+                  title="Open link"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              )}
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <div className="p-1">
-                {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onRemove()
-                }} 
-                className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/30"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+
+            <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+              {isExpanded ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
             </div>
           </div>
+
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={(e) => {
+              e.stopPropagation()
+              onRemove()
+            }} 
+            className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/30 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </CardHeader>
       
       {isExpanded && (
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 pt-0">
+          <Separator />
+          
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold flex items-center gap-2">
-                Title <span className="text-red-500 text-xs">*</span>
+            <div className={`space-y-2 ${isSyllabus ? 'sm:col-span-2' : ''}`}>
+              <Label className="text-sm font-semibold flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5" />
+                Title 
+                <span className="text-red-500 text-xs">*</span>
               </Label>
               <Input 
-                placeholder="e.g., Midterm Question Bank 2024" 
+                placeholder="e.g., Course Syllabus - Fall 2024" 
                 value={tool.title} 
                 onChange={(e) => onUpdate("title", e.target.value)} 
-                className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-600 h-11" 
+                className="h-10 focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-blue-400/20" 
               />
             </div>
+            
             <div className="space-y-2">
-              <Label className="text-sm font-semibold">Type</Label>
+              <Label className="text-sm font-semibold flex items-center gap-1.5">
+                <ClipboardList className="h-3.5 w-3.5" />
+                Type
+                <span className="text-red-500 text-xs">*</span>
+              </Label>
               <Select value={tool.type} onValueChange={(value) => onUpdate("type", value)}>
-                <SelectTrigger className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 h-11">
+                <SelectTrigger className="h-10">
                   <SelectValue placeholder="Select type..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="previous_questions">📝 Previous Questions</SelectItem>
-                  <SelectItem value="exam_note">📚 Exam Notes</SelectItem>
-                  <SelectItem value="syllabus">📋 Syllabus</SelectItem>
-                  <SelectItem value="mark_distribution">📊 Mark Distribution</SelectItem>
+                  <SelectItem value="previous_questions">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-blue-600" />
+                      <span>Previous Questions</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="exam_note">
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="h-4 w-4 text-green-600" />
+                      <span>Exam Notes</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="syllabus">
+                    <div className="flex items-center gap-2">
+                      <GraduationCap className="h-4 w-4 text-purple-600" />
+                      <span>Syllabus</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="mark_distribution">
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4 text-orange-600" />
+                      <span>Mark Distribution</span>
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold flex items-center gap-2">
-                Content URL <span className="text-red-500 text-xs">*</span>
-              </Label>
-              <Input 
-                placeholder="https://drive.google.com/..." 
-                value={tool.content_url} 
-                onChange={(e) => onUpdate("content_url", e.target.value)} 
-                className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-600 h-11" 
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold">Exam Type</Label>
-              <Select value={tool.exam_type} onValueChange={(value) => onUpdate("exam_type", value)}>
-                <SelectTrigger className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 h-11">
-                  <SelectValue placeholder="Select exam type..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="midterm">🎯 Midterm</SelectItem>
-                  <SelectItem value="final">🏆 Final</SelectItem>
-                  <SelectItem value="both">✨ Both</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+
+            {!isSyllabus && (
+              <div className="space-y-2 sm:col-span-2">
+                <Label className="text-sm font-semibold flex items-center gap-1.5">
+                  <LinkIcon className="h-3.5 w-3.5" />
+                  Content URL 
+                  <span className="text-red-500 text-xs">*</span>
+                </Label>
+                <div className="flex gap-2">
+                  <Input 
+                    placeholder="https://drive.google.com/..." 
+                    value={tool.content_url} 
+                    onChange={(e) => onUpdate("content_url", e.target.value)} 
+                    className="h-10 flex-1 focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-blue-400/20 font-mono text-xs" 
+                  />
+                  {tool.content_url && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-10 px-3"
+                      asChild
+                    >
+                      <a href={tool.content_url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="space-y-2">
-            <Label className="text-sm font-semibold">Description (Optional)</Label>
+            <Label className="text-sm font-semibold flex items-center gap-1.5">
+              <FileText className="h-3.5 w-3.5" />
+              Description 
+              <span className="text-xs text-muted-foreground font-normal">(Optional)</span>
+            </Label>
             <Textarea 
-              placeholder="Add additional details about this study tool..." 
+              placeholder={isSyllabus ? "Add syllabus content here..." : "Add additional details about this study tool..."} 
               value={tool.description} 
               onChange={(e) => onUpdate("description", e.target.value)} 
-              rows={2} 
-              className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-600 resize-none" 
+              rows={isSyllabus ? 4 : 2} 
+              className="resize-none focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-blue-400/20" 
             />
+            {isSyllabus && (
+              <p className="text-xs text-muted-foreground">
+                For syllabus, add the content directly in the description field
+              </p>
+            )}
+          </div>
+
+          {/* Validation indicator */}
+          <div className="flex items-center gap-2 pt-2 border-t">
+            <div className="flex-1">
+              {tool.title && (isSyllabus || tool.content_url) ? (
+                <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  <span className="font-medium">Ready to save</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  <span className="font-medium">
+                    {!tool.title && "Title required"}
+                    {tool.title && !isSyllabus && !tool.content_url && "Content URL required"}
+                  </span>
+                </div>
+              )}
+            </div>
+            {!isSyllabus && tool.content_url && (
+              <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+                <a href={tool.content_url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-3 w-3 mr-1" />
+                  Test Link
+                </a>
+              </Button>
+            )}
           </div>
         </CardContent>
       )}
@@ -850,35 +975,65 @@ function EditPageContent() {
                         <Separator />
 
                         {/* Study Tools Section */}
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-semibold flex items-center gap-2 text-base">
-                              <ClipboardList className="h-5 w-5 text-blue-600" />
-                              Study Tools ({course.studyTools?.length || 0})
-                            </h4>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2">
+                              <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-sm">
+                                <ClipboardList className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <h4 className="font-semibold text-base flex items-center gap-2">
+                                  Study Tools
+                                  <Badge variant="secondary" className="text-xs px-2 py-0 h-5">
+                                    {course.studyTools?.length || 0}
+                                  </Badge>
+                                </h4>
+                                <p className="text-xs text-muted-foreground">Exam materials and resources</p>
+                              </div>
+                            </div>
                             <Button 
                               onClick={() => addStudyTool(courseIndex)} 
                               size="sm" 
-                              className="bg-blue-600 hover:bg-blue-700 text-white"
+                              className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-sm h-9"
                             >
-                              <Plus className="h-4 w-4 mr-1" />
+                              <Plus className="h-4 w-4 mr-1.5" />
                               Add Tool
                             </Button>
                           </div>
 
                           {course.studyTools && course.studyTools.length === 0 ? (
-                            <div className="text-center py-8 border-2 border-dashed border-blue-200 dark:border-blue-800 rounded-lg bg-blue-50/30 dark:bg-blue-950/20">
-                              <ClipboardList className="h-12 w-12 text-blue-300 dark:text-blue-600 mx-auto mb-3" />
-                              <p className="text-sm text-muted-foreground mb-3">No study tools added yet</p>
-                              <Button 
-                                onClick={() => addStudyTool(courseIndex)} 
-                                size="sm" 
-                                variant="outline"
-                                className="border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30"
-                              >
-                                <Plus className="h-4 w-4 mr-1" />
-                                Add Your First Tool
-                              </Button>
+                            <div className="relative overflow-hidden text-center py-12 border-2 border-dashed border-blue-200 dark:border-blue-800 rounded-xl bg-gradient-to-br from-blue-50/50 via-blue-50/30 to-transparent dark:from-blue-950/30 dark:via-blue-950/20 dark:to-transparent">
+                              <div className="absolute inset-0 bg-grid-blue-500/[0.03] dark:bg-grid-blue-400/[0.05]" style={{
+                                backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.08'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+                              }} />
+                              <div className="relative">
+                                <div className="mb-4 flex justify-center">
+                                  <div className="p-4 rounded-2xl bg-blue-100 dark:bg-blue-900/40">
+                                    <ClipboardList className="h-10 w-10 text-blue-500 dark:text-blue-400" />
+                                  </div>
+                                </div>
+                                <h5 className="font-semibold text-base mb-2">No Study Tools Yet</h5>
+                                <p className="text-sm text-muted-foreground mb-5 max-w-sm mx-auto">
+                                  Add exam notes, previous questions, syllabus, or mark distributions to help students prepare
+                                </p>
+                                <div className="flex flex-col sm:flex-row gap-2 justify-center items-center">
+                                  <Button 
+                                    onClick={() => addStudyTool(courseIndex)} 
+                                    size="sm" 
+                                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-md"
+                                  >
+                                    <Plus className="h-4 w-4 mr-1.5" />
+                                    Add Your First Tool
+                                  </Button>
+                                  <div className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <span className="hidden sm:inline">or press</span>
+                                    <kbd className="px-2 py-0.5 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600">
+                                      Add Tool
+                                    </kbd>
+                                    <span className="hidden sm:inline">above</span>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           ) : (
                             <DndContext
@@ -890,7 +1045,7 @@ function EditPageContent() {
                                 items={course.studyTools?.map((_, idx) => `studytool-${courseIndex}-${idx}`) || []}
                                 strategy={verticalListSortingStrategy}
                               >
-                                <div className="space-y-3">
+                                <div className="space-y-2">
                                   {course.studyTools?.map((tool, toolIndex) => (
                                     <StudyToolCard
                                       key={toolIndex}

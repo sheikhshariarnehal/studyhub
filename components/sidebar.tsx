@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ChevronDown, ChevronRight, FileText, Play, BookOpen, Users, Search, Clock, Star } from "lucide-react"
+import { ChevronDown, ChevronRight, FileText, Play, BookOpen, Users, Search, Clock, Star, BarChart3 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
@@ -208,7 +208,7 @@ export function Sidebar({ onContentSelect }: SidebarProps) {
       case "syllabus":
         return <FileText className="h-4 w-4 text-purple-500" />
       case "mark_distribution":
-        return <Users className="h-4 w-4 text-orange-500" />
+        return <BarChart3 className="h-4 w-4 text-orange-500" />
       default:
         return <FileText className="h-4 w-4" />
     }

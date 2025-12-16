@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
-import { ChevronDown, ChevronRight, FileText, Play, BookOpen, Users, Search, Star } from "lucide-react"
+import { ChevronDown, ChevronRight, FileText, Play, BookOpen, Users, Search, Star, BarChart3 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
@@ -170,7 +170,7 @@ export function OptimizedSidebar({ onContentSelect }: OptimizedSidebarProps) {
       case "syllabus":
         return <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
       case "mark_distribution":
-        return <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+        return <BarChart3 className="h-3 w-3 sm:h-4 sm:w-4" />
       default:
         return <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
     }
