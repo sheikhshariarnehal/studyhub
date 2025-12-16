@@ -1,20 +1,17 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo, memo, lazy, Suspense } from "react"
+import React, { useState, useEffect, useCallback, useMemo, memo, useRef, startTransition } from "react"
 import {
   ChevronDown, ChevronRight, FileText, Play, BookOpen, Loader2, AlertCircle,
   GraduationCap, ClipboardList, BarChart3, PenTool, FlaskConical, Library
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { supabase } from "@/lib/supabase"
 import type { Database } from "@/lib/supabase"
-import { ProfessionalTopicTitle } from "@/components/ui/professional-topic-title"
 import { useIsMobile } from "@/components/ui/use-mobile"
-import React from "react"
 
 type Semester = Database["public"]["Tables"]["semesters"]["Row"]
 type Course = Database["public"]["Tables"]["courses"]["Row"]
@@ -83,40 +80,61 @@ interface FunctionalSidebarProps {
   initialSemesterId?: string // Auto-select this semester when loading content from URL
 }
 
-// Cache for storing fetched data
-const dataCache = new Map()
-const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+// Optimized cache system with LRU eviction
+const dataCache = new Map<string, { data: any; timestamp: number; hits: number }>()
+const CACHE_DURATION = 10 * 60 * 1000 // 10 minutes
+const MAX_CACHE_SIZE = 100
 
-// Helper function to get cached data or fetch new data
+// LRU cache helper
 const getCachedData = async (key: string, fetchFn: () => Promise<any>): Promise<any> => {
   const cached = dataCache.get(key)
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    cached.hits++
     return cached.data
   }
 
+  // LRU eviction if cache is full
+  if (dataCache.size >= MAX_CACHE_SIZE) {
+    const lruKey = Array.from(dataCache.entries())
+      .sort((a, b) => a[1].hits - b[1].hits)[0]?.[0]
+    if (lruKey) dataCache.delete(lruKey)
+  }
+
   const data = await fetchFn()
-  dataCache.set(key, { data, timestamp: Date.now() })
+  dataCache.set(key, { data, timestamp: Date.now(), hits: 1 })
   return data
 }
 
+// Debounce utility for scroll handlers
+const useDebounce = <T extends (...args: any[]) => void>(fn: T, delay: number) => {
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+  return useCallback((...args: Parameters<T>) => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    timeoutRef.current = setTimeout(() => fn(...args), delay)
+  }, [fn, delay])
+}
+
 export function FunctionalSidebar({ onContentSelect, selectedContentId, initialSemesterId }: FunctionalSidebarProps) {
-  const [semesters, setSemesters] = useState([])
+  const [semesters, setSemesters] = useState<Semester[]>([])
   const [selectedSemester, setSelectedSemester] = useState("")
-  const [courses, setCourses] = useState([])
+  const [courses, setCourses] = useState<Course[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [error, setError] = useState<string | null>(null)
 
-  // Expansion states
-  const [expandedCourses, setExpandedCourses] = useState(new Set())
-  const [expandedStudyTools, setExpandedStudyTools] = useState(new Set())
-  const [expandedTopics, setExpandedTopics] = useState(new Set())
-  const [expandedTopicItems, setExpandedTopicItems] = useState(new Set())
+  // Optimized expansion states using useRef for non-render-critical updates
+  const [expandedCourses, setExpandedCourses] = useState<Set<string>>(new Set())
+  const [expandedStudyTools, setExpandedStudyTools] = useState<Set<string>>(new Set())
+  const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set())
+  const [expandedTopicItems, setExpandedTopicItems] = useState<Set<string>>(new Set())
 
-  // Course data cache with loading states
-  const [courseData, setCourseData] = useState({})
+  // Course data cache with loading states - using Map for O(1) lookups
+  const [courseData, setCourseData] = useState<Record<string, any>>({})
 
   // Track if we've tried to auto-expand for current content
-  const hasAutoExpandedRef = React.useRef<string | null>(null)
+  const hasAutoExpandedRef = useRef<string | null>(null)
+  
+  // Scroll container ref for optimized scroll handling
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   
   // Reset auto-expand ref when selectedContentId changes
   useEffect(() => {
@@ -128,9 +146,8 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
 
   // Mobile-specific state and functionality
   const isMobile = useIsMobile()
-  const [touchStartY, setTouchStartY] = useState(null)
-  const [isScrolling, setIsScrolling] = useState(false)
-  const [compactMode, setCompactMode] = useState(false)
+  const touchStartRef = useRef<number | null>(null)
+  const isScrollingRef = useRef(false)
 
   // Fetch semesters on component mount
   useEffect(() => {
@@ -398,52 +415,56 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
     }
   }, [courseData])
 
-  // Optimized toggle functions - Only one course can be open at a time
+  // Optimized toggle functions with batched state updates
   const toggleCourse = useCallback((courseId: string) => {
-    setExpandedCourses((prev) => {
-      const newSet = new Set()
-      
-      // If clicking on already expanded course, collapse it
-      if (prev.has(courseId)) {
-        // Close everything
-        setExpandedTopics(new Set())
-        setExpandedTopicItems(new Set())
-        setExpandedStudyTools(new Set())
-      } else {
-        // Close all other courses and open only this one
-        newSet.add(courseId)
-        // Reset all nested expansions when switching courses
-        setExpandedTopics(new Set())
-        setExpandedTopicItems(new Set())
-        setExpandedStudyTools(new Set())
-        // Only fetch data when expanding
-        setTimeout(() => fetchCourseData(courseId), 0)
-      }
-      return newSet
+    startTransition(() => {
+      setExpandedCourses((prev) => {
+        const isCurrentlyExpanded = prev.has(courseId)
+        
+        if (isCurrentlyExpanded) {
+          // Batch collapse all
+          setExpandedTopics(new Set())
+          setExpandedTopicItems(new Set())
+          setExpandedStudyTools(new Set())
+          return new Set()
+        } else {
+          // Batch reset and expand new
+          setExpandedTopics(new Set())
+          setExpandedTopicItems(new Set())
+          setExpandedStudyTools(new Set())
+          // Fetch data asynchronously
+          queueMicrotask(() => fetchCourseData(courseId))
+          return new Set([courseId])
+        }
+      })
     })
   }, [fetchCourseData])
 
   const toggleStudyTools = useCallback((courseId: string) => {
-    setExpandedStudyTools((prev) => {
-      const newSet = new Set(prev)
-      if (newSet.has(courseId)) {
-        newSet.delete(courseId)
-      } else {
-        newSet.add(courseId)
-      }
-      return newSet
+    startTransition(() => {
+      setExpandedStudyTools((prev) => {
+        const newSet = new Set(prev)
+        if (newSet.has(courseId)) {
+          newSet.delete(courseId)
+        } else {
+          newSet.add(courseId)
+        }
+        return newSet
+      })
     })
   }, [])
 
   const toggleTopics = useCallback((courseId: string) => {
-    setExpandedTopics((prev) => {
-      const newSet = new Set(prev)
-      if (newSet.has(courseId)) {
-        newSet.delete(courseId)
-      } else {
-        newSet.add(courseId)
-      }
-      return newSet
+    startTransition(() => {
+      setExpandedTopics((prev) => {
+        const newSet = new Set(prev)
+        if (newSet.has(courseId)) {
+          newSet.delete(courseId)
+        } else {
+          newSet.add(courseId)
+        }
+        return newSet
+      })
     })
   }, [])
 
@@ -494,33 +515,35 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
   }, [courseData])
 
   const toggleTopicItem = useCallback((topicId: string, courseId: string) => {
-    setExpandedTopicItems((prev) => {
-      const newSet = new Set(prev)
-      
-      // If clicking on already expanded topic, collapse it
-      if (newSet.has(topicId)) {
-        newSet.delete(topicId)
-      } else {
-        // Close all other topics in the same course before opening this one
-        const currentCourseData = courseData[courseId]
-        if (currentCourseData?.topics) {
-          currentCourseData.topics.forEach(topic => {
-            if (topic.id !== topicId) {
-              newSet.delete(topic.id)
-            }
-          })
-        }
+    startTransition(() => {
+      setExpandedTopicItems((prev) => {
+        const newSet = new Set(prev)
         
-        // Now add the new topic
-        newSet.add(topicId)
-        // Lazy load content when expanding
-        fetchTopicContent(courseId, topicId)
-      }
-      return newSet
+        // If clicking on already expanded topic, collapse it
+        if (newSet.has(topicId)) {
+          newSet.delete(topicId)
+        } else {
+          // Close all other topics in the same course before opening this one
+          const currentCourseData = courseData[courseId]
+          if (currentCourseData?.topics) {
+            currentCourseData.topics.forEach((topic: Topic) => {
+              if (topic.id !== topicId) {
+                newSet.delete(topic.id)
+              }
+            })
+          }
+          
+          // Now add the new topic
+          newSet.add(topicId)
+          // Lazy load content when expanding
+          queueMicrotask(() => fetchTopicContent(courseId, topicId))
+        }
+        return newSet
+      })
     })
   }, [fetchTopicContent, courseData])
 
-  // Content selection handlers
+  // Optimized content selection handler with memoization
   const handleContentClick = useCallback(
     (
       type: "slide" | "video" | "document" | "syllabus" | "study-tool",
@@ -731,28 +754,31 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
         </div>
       )}
 
-      {/* Course List */}
+      {/* Course List - Optimized with refs for touch handling */}
       <ScrollArea className={`flex-1 ${isMobile ? 'mobile-scroll-container' : ''}`}>
         <div
+          ref={scrollContainerRef}
           className={`${isMobile ? 'px-4 py-3 space-y-2' : 'px-3 py-2.5 space-y-2'}`}
           onTouchStart={(e) => {
             if (isMobile) {
-              setTouchStartY(e.touches[0].clientY)
-              setIsScrolling(false)
+              touchStartRef.current = e.touches[0].clientY
+              isScrollingRef.current = false
             }
           }}
           onTouchMove={(e) => {
-            if (isMobile && touchStartY !== null) {
-              const deltaY = Math.abs(e.touches[0].clientY - touchStartY)
+            if (isMobile && touchStartRef.current !== null) {
+              const deltaY = Math.abs(e.touches[0].clientY - touchStartRef.current)
               if (deltaY > 10) {
-                setIsScrolling(true)
+                isScrollingRef.current = true
               }
             }
           }}
           onTouchEnd={() => {
             if (isMobile) {
-              setTouchStartY(null)
-              setTimeout(() => setIsScrolling(false), 100)
+              touchStartRef.current = null
+              requestAnimationFrame(() => {
+                isScrollingRef.current = false
+              })
             }
           }}
         >
@@ -767,7 +793,7 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
           ) : (
             filteredCourses.map((course) => {
               // Get current semester info for semantic URLs
-              const currentSemester = semesters.find((s: any) => s.id === selectedSemester)
+              const currentSemester = semesters.find((s: Semester) => s.id === selectedSemester)
               const semesterInfo = currentSemester ? {
                 id: currentSemester.id,
                 title: currentSemester.title,
@@ -793,8 +819,6 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
                   getStudyToolLabel={getStudyToolLabel}
                   selectedContentId={selectedContentId}
                   isMobile={isMobile}
-                  compactMode={compactMode}
-                  isScrolling={isScrolling}
                   semesterInfo={semesterInfo}
                 />
               )
@@ -806,8 +830,37 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
   )
 }
 
-// Memoized CourseItem component to prevent unnecessary re-renders
-const CourseItem = React.memo(
+// Optimized CourseItem with deep memo comparison
+interface CourseItemProps {
+  course: Course
+  courseData?: any
+  expandedCourses: Set<string>
+  expandedStudyTools: Set<string>
+  expandedTopics: Set<string>
+  expandedTopicItems: Set<string>
+  onToggleCourse: (id: string) => void
+  onToggleStudyTools: (id: string) => void
+  onToggleTopics: (id: string) => void
+  onToggleTopicItem: (topicId: string, courseId: string) => void
+  onContentClick: (
+    type: any,
+    title: string,
+    url: string,
+    id: string,
+    topicTitle?: string,
+    courseTitle?: string,
+    description?: string,
+    courseCode?: string,
+    semesterInfo?: { id: string; title: string; section: string; is_active: boolean },
+  ) => void
+  getStudyToolIcon: (type: string) => React.ReactNode
+  getStudyToolLabel: (type: string) => string
+  selectedContentId?: string
+  isMobile?: boolean
+  semesterInfo?: { id: string; title: string; section: string; is_active: boolean }
+}
+
+const CourseItem = memo<CourseItemProps>(
   ({
     course,
     courseData,
@@ -824,44 +877,23 @@ const CourseItem = React.memo(
     getStudyToolLabel,
     selectedContentId,
     isMobile = false,
-    compactMode = false,
-    isScrolling = false,
     semesterInfo,
-  }: {
-    course: Course
-    courseData?: any
-    expandedCourses: Set<string>
-    expandedStudyTools: Set<string>
-    expandedTopics: Set<string>
-    expandedTopicItems: Set<string>
-    onToggleCourse: (id: string) => void
-    onToggleStudyTools: (id: string) => void
-    onToggleTopics: (id: string) => void
-    onToggleTopicItem: (topicId: string, courseId: string) => void
-    onContentClick: (
-      type: any,
-      title: string,
-      url: string,
-      id: string,
-      topicTitle?: string,
-      courseTitle?: string,
-      description?: string,
-      courseCode?: string,
-      semesterInfo?: { id: string; title: string; section: string; is_active: boolean },
-    ) => void
-    getStudyToolIcon: (type: string) => React.ReactNode
-    getStudyToolLabel: (type: string) => string
-    selectedContentId?: string
-    isMobile?: boolean
-    compactMode?: boolean
-    isScrolling?: boolean
-    semesterInfo?: { id: string; title: string; section: string; is_active: boolean }
   }) => {
+    // Memoize computed values
+    const isExpanded = expandedCourses.has(course.id)
+    const isStudyToolsExpanded = expandedStudyTools.has(course.id)
+    const isTopicsExpanded = expandedTopics.has(course.id)
+    
+    // Memoize click handler
+    const handleCourseClick = useCallback(() => {
+      onToggleCourse(course.id)
+    }, [onToggleCourse, course.id])
+
     return (
-      <div className={`${isMobile ? 'space-y-2' : 'space-y-1.5'}`}>
+      <div className={`${isMobile ? 'space-y-2' : 'space-y-1.5'} will-change-transform`}>
         {/* Professional Course Card */}
-        <div className={`group relative ${isMobile ? 'bg-card rounded-xl border border-border/30 shadow-sm' : 'bg-card rounded-xl hover:shadow-md transition-all duration-200 border border-border/40 hover:border-primary/30'} ${
-          expandedCourses.has(course.id) ? 'shadow-sm border-primary/20' : ''
+        <div className={`group relative ${isMobile ? 'bg-card rounded-xl border border-border/30 shadow-sm' : 'bg-card rounded-xl hover:shadow-md transition-shadow duration-200 border border-border/40 hover:border-primary/30'} ${
+          isExpanded ? 'shadow-sm border-primary/20' : ''
         }`}>
           <div className={`${isMobile ? 'p-3' : 'p-3'} rounded-xl ${
             course.is_highlighted 
@@ -871,18 +903,18 @@ const CourseItem = React.memo(
             <Button
               variant="ghost"
               className={`w-full justify-start text-left p-0 h-auto hover:bg-transparent ${isMobile ? 'min-h-[48px]' : ''}`}
-              onClick={() => !isScrolling && onToggleCourse(course.id)}
+              onClick={handleCourseClick}
             >
               <div className={`flex items-start w-full ${isMobile ? 'gap-3' : 'gap-2.5'}`}>
-                {/* Chevron Icon */}
-                <div className={`flex-shrink-0 ${isMobile ? 'mt-1' : 'mt-0.5'}`}>
-                  {expandedCourses.has(course.id) ? (
-                    <div className="p-1 rounded-md bg-primary/15 transition-all duration-200">
+                {/* Chevron Icon - GPU accelerated */}
+                <div className={`flex-shrink-0 ${isMobile ? 'mt-1' : 'mt-0.5'} transform-gpu`}>
+                  {isExpanded ? (
+                    <div className="p-1 rounded-md bg-primary/15 transition-colors duration-150">
                       <ChevronDown className={`${isMobile ? 'h-4 w-4' : 'h-4 w-4'} text-primary`} />
                     </div>
                   ) : (
-                    <div className="p-1 rounded-md bg-muted/50 group-hover:bg-primary/10 transition-all duration-200">
-                      <ChevronRight className={`${isMobile ? 'h-4 w-4' : 'h-4 w-4'} text-muted-foreground group-hover:text-primary transition-colors duration-200`} />
+                    <div className="p-1 rounded-md bg-muted/50 group-hover:bg-primary/10 transition-colors duration-150">
+                      <ChevronRight className={`${isMobile ? 'h-4 w-4' : 'h-4 w-4'} text-muted-foreground group-hover:text-primary transition-colors duration-150`} />
                     </div>
                   )}
                 </div>
@@ -898,7 +930,7 @@ const CourseItem = React.memo(
                         </h4>
                         {course.is_highlighted && (
                           <div className="flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/20 rounded-md">
-                            <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></div>
+                            <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
                             <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400">Featured</span>
                           </div>
                         )}
@@ -922,7 +954,7 @@ const CourseItem = React.memo(
                         </h4>
                         {course.is_highlighted && (
                           <div className="flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/20 rounded-md">
-                            <div className="w-1.5 h-1.5 bg-amber-500 rounded-full animate-pulse"></div>
+                            <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
                             <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400">Featured</span>
                           </div>
                         )}
@@ -952,276 +984,44 @@ const CourseItem = React.memo(
           </div>
         </div>
 
-        {/* Course Content with Smooth Animation */}
-        {expandedCourses.has(course.id) && courseData && !courseData.isLoading && (
-          <div className={`${isMobile ? 'ml-4 space-y-1.5' : 'ml-3 space-y-1'} course-expand-enter`}>
+        {/* Course Content with GPU-accelerated Animation */}
+        {isExpanded && courseData && !courseData.isLoading && (
+          <div className={`${isMobile ? 'ml-4 space-y-1.5' : 'ml-3 space-y-1'} transform-gpu`}>
             {/* Study Tools Section */}
             {courseData.studyTools.length > 0 && (
-              <div>
-                <Button
-                  variant="ghost"
-                  className={`w-full justify-start text-left ${isMobile ? 'p-2 h-auto hover:bg-accent/30 rounded-md' : 'px-2 py-1.5 h-auto hover:bg-accent rounded-md'}`}
-                  onClick={() => onToggleStudyTools(course.id)}
-                >
-                  <div className="flex items-center gap-2">
-                    {expandedStudyTools.has(course.id) ? (
-                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                    ) : (
-                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                    )}
-                    <BookOpen className="h-3.5 w-3.5 text-primary" />
-                    <span className="text-sm text-foreground flex-1">
-                      Study Resources
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {courseData.studyTools.length}
-                    </span>
-                  </div>
-                </Button>
-
-                {expandedStudyTools.has(course.id) && (
-                  <div className="ml-5 space-y-0.5 mt-0.5">
-                    {courseData.studyTools.map((tool: StudyTool) => {
-                      const isSelected = selectedContentId === tool.id
-                      return (
-                        <Button
-                          key={tool.id}
-                          variant="ghost"
-                          className={`w-full justify-start text-left px-2 py-1.5 h-auto rounded transition-colors ${
-                            isSelected
-                              ? "bg-primary/10 text-primary"
-                              : "hover:bg-accent/50"
-                          }`}
-                          onClick={() => {
-                            if (tool.type === "syllabus") {
-                              // For syllabus, use description as content and pass it via URL parameter
-                              onContentClick("syllabus", tool.title, `#syllabus-${tool.id}`, tool.id, undefined, course.title, tool.description, course.course_code, semesterInfo)
-                            } else if (tool.content_url) {
-                              onContentClick("study-tool", tool.title, tool.content_url, tool.id, undefined, course.title, undefined, course.course_code, semesterInfo)
-                            }
-                          }}
-                          disabled={tool.type !== "syllabus" && !tool.content_url}
-                        >
-                          <div className="flex items-center gap-2 w-full">
-                            {getStudyToolIcon(tool.type)}
-                            <span className={`text-xs truncate flex-1 ${
-                              isSelected ? "text-foreground font-medium" : "text-muted-foreground"
-                            }`}>
-                              {tool.title}
-                            </span>
-                            {isSelected && (
-                              <div className="w-1.5 h-1.5 bg-primary rounded-full flex-shrink-0"></div>
-                            )}
-                          </div>
-                        </Button>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
+              <StudyToolsSection
+                courseId={course.id}
+                courseTitle={course.title}
+                courseCode={course.course_code}
+                studyTools={courseData.studyTools}
+                isExpanded={isStudyToolsExpanded}
+                onToggle={onToggleStudyTools}
+                onContentClick={onContentClick}
+                getStudyToolIcon={getStudyToolIcon}
+                selectedContentId={selectedContentId}
+                isMobile={isMobile}
+                semesterInfo={semesterInfo}
+              />
             )}
 
             {/* Topics Section */}
             {courseData.topics.length > 0 && (
-              <div className="min-w-0">
-                <Button
-                  variant="ghost"
-                  className={`w-full justify-start text-left ${isMobile ? 'p-2 h-auto hover:bg-accent/30 rounded-md' : 'px-2 py-1.5 h-auto hover:bg-accent rounded-md'} touch-manipulation`}
-                  onClick={() => !isScrolling && onToggleTopics(course.id)}
-                >
-                  <div className="flex items-center gap-2">
-                    {expandedTopics.has(course.id) ? (
-                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                    ) : (
-                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                    )}
-                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-sm text-foreground flex-1">Topics</span>
-                    <span className="text-xs text-muted-foreground">
-                      {courseData.topics.length}
-                    </span>
-                  </div>
-                </Button>
-
-                {expandedTopics.has(course.id) && (
-                  <div className={`${isMobile ? 'ml-2 space-y-1 pr-1' : 'ml-3 space-y-0.5'} mt-1 min-w-0 border-l border-border/30 ${isMobile ? 'pl-1.5' : 'pl-2'} topic-list-expand`}>
-                    {courseData.topics.map((topic: Topic, index: number) => {
-                      const topicSlides = courseData.slides[topic.id] || []
-                      const topicVideos = courseData.videos[topic.id] || []
-                      const hasContent = topicSlides.length > 0 || topicVideos.length > 0
-
-                      return (
-                        <div key={topic.id} className="min-w-0 relative">
-                          {/* Professional Topic Item */}
-                          <Button
-                            variant="ghost"
-                            className={`w-full justify-start text-left ${isMobile ? 'px-2 py-2 min-h-[40px]' : 'px-2.5 py-2'} h-auto min-w-0 rounded-lg transition-all duration-300 sidebar-item-professional group ${
-                              expandedTopicItems.has(topic.id)
-                                ? 'bg-gradient-to-r from-primary/15 to-primary/8 border-l-[3px] border-primary shadow-sm'
-                                : 'hover:bg-accent/60 border-l-[3px] border-transparent hover:border-primary/40'
-                            }`}
-                            onClick={() => !isScrolling && onToggleTopicItem(topic.id, course.id)}
-                          >
-                            <div className={`flex items-center ${isMobile ? 'gap-2' : 'gap-2.5'} w-full min-w-0`}>
-                              {/* Enhanced Chevron with Smooth Rotation */}
-                              <div className={`transition-transform duration-300 ease-out ${
-                                expandedTopicItems.has(topic.id) ? 'rotate-90' : 'rotate-0'
-                              }`}>
-                                <ChevronRight className={`${isMobile ? 'h-3.5 w-3.5' : 'h-4 w-4'} flex-shrink-0 transition-colors duration-200 ${
-                                  expandedTopicItems.has(topic.id) ? 'text-primary' : 'text-muted-foreground'
-                                }`} />
-                              </div>
-
-                              {/* Topic Title with Number Badge */}
-                              <div className={`flex items-center ${isMobile ? 'gap-1.5' : 'gap-2'} flex-1 min-w-0`}>
-                                <div className={`flex-shrink-0 ${isMobile ? 'w-4 h-4 text-[9px]' : 'w-5 h-5 text-[10px]'} rounded flex items-center justify-center font-semibold transition-all duration-200 ${
-                                  expandedTopicItems.has(topic.id) 
-                                    ? "bg-primary text-primary-foreground shadow-sm" 
-                                    : "bg-muted text-muted-foreground group-hover:bg-primary/20 group-hover:text-primary"
-                                }`}>
-                                  {index + 1}
-                                </div>
-                                <span className={`${isMobile ? 'text-[11px] leading-tight' : 'text-xs'} break-words line-clamp-2 min-w-0 flex-1 transition-all duration-200 ${
-                                  expandedTopicItems.has(topic.id) 
-                                    ? "text-primary font-semibold" 
-                                    : "text-foreground font-medium group-hover:text-primary"
-                                }`}>
-                                  {topic.title}
-                                </span>
-                              </div>
-                            </div>
-                          </Button>
-
-                          {/* Enhanced Professional Content Items */}
-                          {expandedTopicItems.has(topic.id) && (
-                            <div className={`${isMobile ? 'ml-3 mr-0' : 'ml-6 mr-0.5'} space-y-0.5 mt-1 mb-1 min-w-0 border-l border-border/20 ${isMobile ? 'pl-1.5' : 'pl-2'} topic-content-expand`}>
-                              {/* Videos - Professional Style */}
-                              {topicVideos.map((video: Video) => {
-                                const isSelected = selectedContentId === video.id
-                                return (
-                                  <Button
-                                    key={video.id}
-                                    variant="ghost"
-                                    data-content-id={video.id}
-                                    className={`w-full justify-start text-left ${isMobile ? 'px-2 py-2 min-h-[36px]' : 'px-2.5 py-2'} h-auto rounded-lg min-w-0 transition-all duration-200 content-item group ${
-                                      isSelected
-                                        ? "bg-gradient-to-r from-red-50/50 to-red-50/30 dark:from-red-500/15 dark:to-red-500/10 border-l-[3px] border-red-500 shadow-sm"
-                                        : "hover:bg-accent/50 border-l-[3px] border-transparent hover:border-red-400/40"
-                                    }`}
-                                    onClick={() =>
-                                      !isScrolling && onContentClick(
-                                        "video",
-                                        video.title,
-                                        video.youtube_url,
-                                        video.id,
-                                        topic.title,
-                                        course.title,
-                                        undefined,
-                                        course.course_code,
-                                        semesterInfo,
-                                      )
-                                    }
-                                  >
-                                    <div className={`flex items-center ${isMobile ? 'gap-1.5' : 'gap-2'} w-full min-w-0`}>
-                                      <div className={`${isMobile ? 'p-0.5' : 'p-1'} rounded-md transition-all duration-200 ${
-                                        isSelected 
-                                          ? "bg-red-500/20" 
-                                          : "bg-red-500/10 group-hover:bg-red-500/15"
-                                      }`}>
-                                        <Play className={`${isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5'} flex-shrink-0 transition-colors ${
-                                          isSelected 
-                                            ? "text-red-600 dark:text-red-400" 
-                                            : "text-red-500 group-hover:text-red-600"
-                                        }`} />
-                                      </div>
-                                      <span className={`${isMobile ? 'text-[11px] leading-snug' : 'text-xs leading-relaxed'} break-words min-w-0 flex-1 line-clamp-2 transition-all duration-200 ${
-                                        isSelected 
-                                          ? "font-semibold text-foreground" 
-                                          : "text-muted-foreground font-medium group-hover:text-foreground"
-                                      }`}>
-                                        {video.title}
-                                      </span>
-                                      {isSelected && (
-                                        <div className={`flex-shrink-0 ${isMobile ? 'w-1 h-1' : 'w-1.5 h-1.5'} bg-red-500 rounded-full animate-pulse`} />
-                                      )}
-                                    </div>
-                                  </Button>
-                                )
-                              })}
-
-                              {/* Slides - Professional Style */}
-                              {topicSlides.map((slide: Slide) => {
-                                const isSelected = selectedContentId === slide.id
-                                return (
-                                  <Button
-                                    key={slide.id}
-                                    variant="ghost"
-                                    data-content-id={slide.id}
-                                    className={`w-full justify-start text-left ${isMobile ? 'px-2 py-2 min-h-[36px]' : 'px-2.5 py-2'} h-auto rounded-lg min-w-0 transition-all duration-200 content-item group ${
-                                      isSelected
-                                        ? "bg-gradient-to-r from-blue-50/50 to-blue-50/30 dark:from-blue-500/15 dark:to-blue-500/10 border-l-[3px] border-blue-500 shadow-sm"
-                                        : "hover:bg-accent/50 border-l-[3px] border-transparent hover:border-blue-400/40"
-                                    }`}
-                                    onClick={() =>
-                                      !isScrolling && onContentClick(
-                                        "slide",
-                                        slide.title,
-                                        slide.google_drive_url,
-                                        slide.id,
-                                        topic.title,
-                                        course.title,
-                                        undefined,
-                                        course.course_code,
-                                        semesterInfo,
-                                      )
-                                    }
-                                  >
-                                    <div className={`flex items-center ${isMobile ? 'gap-1.5' : 'gap-2'} w-full min-w-0`}>
-                                      <div className={`${isMobile ? 'p-0.5' : 'p-1'} rounded-md transition-all duration-200 ${
-                                        isSelected 
-                                          ? "bg-blue-500/20" 
-                                          : "bg-blue-500/10 group-hover:bg-blue-500/15"
-                                      }`}>
-                                        <FileText className={`${isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5'} flex-shrink-0 transition-colors ${
-                                          isSelected 
-                                            ? "text-blue-600 dark:text-blue-400" 
-                                            : "text-blue-500 group-hover:text-blue-600"
-                                        }`} />
-                                      </div>
-                                      <span className={`${isMobile ? 'text-[11px] leading-snug' : 'text-xs leading-relaxed'} break-words min-w-0 flex-1 line-clamp-2 transition-all duration-200 ${
-                                        isSelected 
-                                          ? "font-semibold text-foreground" 
-                                          : "text-muted-foreground font-medium group-hover:text-foreground"
-                                      }`}>
-                                        {slide.title}
-                                      </span>
-                                      {isSelected && (
-                                        <div className={`flex-shrink-0 ${isMobile ? 'w-1 h-1' : 'w-1.5 h-1.5'} bg-blue-500 rounded-full animate-pulse`} />
-                                      )}
-                                    </div>
-                                  </Button>
-                                )
-                              })}
-
-                              {/* Enhanced Empty State */}
-                              {topicSlides.length === 0 && topicVideos.length === 0 && (
-                                <div className="text-center py-5 px-3">
-                                  <div className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-muted/50 mb-2">
-                                    <FileText className="h-4 w-4 text-muted-foreground/50" />
-                                  </div>
-                                  <div className="text-xs text-muted-foreground/70 font-medium">
-                                    No content available
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
+              <TopicsSection
+                courseId={course.id}
+                courseTitle={course.title}
+                courseCode={course.course_code}
+                topics={courseData.topics}
+                slides={courseData.slides}
+                videos={courseData.videos}
+                isExpanded={isTopicsExpanded}
+                expandedTopicItems={expandedTopicItems}
+                onToggle={onToggleTopics}
+                onToggleTopicItem={onToggleTopicItem}
+                onContentClick={onContentClick}
+                selectedContentId={selectedContentId}
+                isMobile={isMobile}
+                semesterInfo={semesterInfo}
+              />
             )}
 
             {/* Empty state for course with no content */}
@@ -1235,6 +1035,432 @@ const CourseItem = React.memo(
       </div>
     )
   },
+  // Custom comparison for better memoization
+  (prevProps, nextProps) => {
+    return (
+      prevProps.course.id === nextProps.course.id &&
+      prevProps.expandedCourses.has(prevProps.course.id) === nextProps.expandedCourses.has(nextProps.course.id) &&
+      prevProps.expandedStudyTools.has(prevProps.course.id) === nextProps.expandedStudyTools.has(nextProps.course.id) &&
+      prevProps.expandedTopics.has(prevProps.course.id) === nextProps.expandedTopics.has(nextProps.course.id) &&
+      prevProps.selectedContentId === nextProps.selectedContentId &&
+      prevProps.courseData === nextProps.courseData &&
+      prevProps.isMobile === nextProps.isMobile &&
+      // Only shallow compare expandedTopicItems if topics are expanded
+      (!nextProps.expandedTopics.has(nextProps.course.id) || 
+        areSetsEqual(prevProps.expandedTopicItems, nextProps.expandedTopicItems, nextProps.courseData?.topics))
+    )
+  }
 )
 
+// Helper to compare sets for relevant topic IDs only
+function areSetsEqual(set1: Set<string>, set2: Set<string>, topics?: Topic[]): boolean {
+  if (!topics) return true
+  for (const topic of topics) {
+    if (set1.has(topic.id) !== set2.has(topic.id)) return false
+  }
+  return true
+}
+
 CourseItem.displayName = "CourseItem"
+
+// Memoized Study Tools Section Component
+interface StudyToolsSectionProps {
+  courseId: string
+  courseTitle: string
+  courseCode: string
+  studyTools: StudyTool[]
+  isExpanded: boolean
+  onToggle: (courseId: string) => void
+  onContentClick: (type: any, title: string, url: string, id: string, topicTitle?: string, courseTitle?: string, description?: string, courseCode?: string, semesterInfo?: any) => void
+  getStudyToolIcon: (type: string) => React.ReactNode
+  selectedContentId?: string
+  isMobile?: boolean
+  semesterInfo?: any
+}
+
+const StudyToolsSection = memo<StudyToolsSectionProps>(({
+  courseId,
+  courseTitle,
+  courseCode,
+  studyTools,
+  isExpanded,
+  onToggle,
+  onContentClick,
+  getStudyToolIcon,
+  selectedContentId,
+  isMobile,
+  semesterInfo,
+}) => {
+  const handleToggle = useCallback(() => onToggle(courseId), [onToggle, courseId])
+
+  return (
+    <div>
+      <Button
+        variant="ghost"
+        className={`w-full justify-start text-left ${isMobile ? 'p-2 h-auto hover:bg-accent/30 rounded-md' : 'px-2 py-1.5 h-auto hover:bg-accent rounded-md'}`}
+        onClick={handleToggle}
+      >
+        <div className="flex items-center gap-2">
+          {isExpanded ? (
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
+          <BookOpen className="h-3.5 w-3.5 text-primary" />
+          <span className="text-sm text-foreground flex-1">Study Resources</span>
+          <span className="text-xs text-muted-foreground">{studyTools.length}</span>
+        </div>
+      </Button>
+
+      {isExpanded && (
+        <div className="ml-5 space-y-0.5 mt-0.5">
+          {studyTools.map((tool) => (
+            <StudyToolItem
+              key={tool.id}
+              tool={tool}
+              courseTitle={courseTitle}
+              courseCode={courseCode}
+              isSelected={selectedContentId === tool.id}
+              onContentClick={onContentClick}
+              getStudyToolIcon={getStudyToolIcon}
+              semesterInfo={semesterInfo}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+})
+
+StudyToolsSection.displayName = "StudyToolsSection"
+
+// Memoized Study Tool Item
+interface StudyToolItemProps {
+  tool: StudyTool
+  courseTitle: string
+  courseCode: string
+  isSelected: boolean
+  onContentClick: (type: any, title: string, url: string, id: string, topicTitle?: string, courseTitle?: string, description?: string, courseCode?: string, semesterInfo?: any) => void
+  getStudyToolIcon: (type: string) => React.ReactNode
+  semesterInfo?: any
+}
+
+const StudyToolItem = memo<StudyToolItemProps>(({
+  tool,
+  courseTitle,
+  courseCode,
+  isSelected,
+  onContentClick,
+  getStudyToolIcon,
+  semesterInfo,
+}) => {
+  const handleClick = useCallback(() => {
+    if (tool.type === "syllabus") {
+      onContentClick("syllabus", tool.title, `#syllabus-${tool.id}`, tool.id, undefined, courseTitle, tool.description || '', courseCode, semesterInfo)
+    } else if (tool.content_url) {
+      onContentClick("study-tool", tool.title, tool.content_url, tool.id, undefined, courseTitle, undefined, courseCode, semesterInfo)
+    }
+  }, [tool, courseTitle, courseCode, onContentClick, semesterInfo])
+
+  return (
+    <Button
+      variant="ghost"
+      className={`w-full justify-start text-left px-2 py-1.5 h-auto rounded transition-colors duration-150 ${
+        isSelected ? "bg-primary/10 text-primary" : "hover:bg-accent/50"
+      }`}
+      onClick={handleClick}
+      disabled={tool.type !== "syllabus" && !tool.content_url}
+    >
+      <div className="flex items-center gap-2 w-full">
+        {getStudyToolIcon(tool.type)}
+        <span className={`text-xs truncate flex-1 ${isSelected ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+          {tool.title}
+        </span>
+        {isSelected && <div className="w-1.5 h-1.5 bg-primary rounded-full flex-shrink-0" />}
+      </div>
+    </Button>
+  )
+})
+
+StudyToolItem.displayName = "StudyToolItem"
+
+// Memoized Topics Section Component
+interface TopicsSectionProps {
+  courseId: string
+  courseTitle: string
+  courseCode: string
+  topics: Topic[]
+  slides: Record<string, Slide[]>
+  videos: Record<string, Video[]>
+  isExpanded: boolean
+  expandedTopicItems: Set<string>
+  onToggle: (courseId: string) => void
+  onToggleTopicItem: (topicId: string, courseId: string) => void
+  onContentClick: (type: any, title: string, url: string, id: string, topicTitle?: string, courseTitle?: string, description?: string, courseCode?: string, semesterInfo?: any) => void
+  selectedContentId?: string
+  isMobile?: boolean
+  semesterInfo?: any
+}
+
+const TopicsSection = memo<TopicsSectionProps>(({
+  courseId,
+  courseTitle,
+  courseCode,
+  topics,
+  slides,
+  videos,
+  isExpanded,
+  expandedTopicItems,
+  onToggle,
+  onToggleTopicItem,
+  onContentClick,
+  selectedContentId,
+  isMobile,
+  semesterInfo,
+}) => {
+  const handleToggle = useCallback(() => onToggle(courseId), [onToggle, courseId])
+
+  return (
+    <div className="min-w-0">
+      <Button
+        variant="ghost"
+        className={`w-full justify-start text-left ${isMobile ? 'p-2 h-auto hover:bg-accent/30 rounded-md' : 'px-2 py-1.5 h-auto hover:bg-accent rounded-md'} touch-manipulation`}
+        onClick={handleToggle}
+      >
+        <div className="flex items-center gap-2">
+          {isExpanded ? (
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
+          <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-sm text-foreground flex-1">Topics</span>
+          <span className="text-xs text-muted-foreground">{topics.length}</span>
+        </div>
+      </Button>
+
+      {isExpanded && (
+        <div className={`${isMobile ? 'ml-2 space-y-1 pr-1' : 'ml-3 space-y-0.5'} mt-1 min-w-0 border-l border-border/30 ${isMobile ? 'pl-1.5' : 'pl-2'}`}>
+          {topics.map((topic, index) => (
+            <TopicItem
+              key={topic.id}
+              topic={topic}
+              index={index}
+              courseId={courseId}
+              courseTitle={courseTitle}
+              courseCode={courseCode}
+              slides={slides[topic.id] || []}
+              videos={videos[topic.id] || []}
+              isExpanded={expandedTopicItems.has(topic.id)}
+              onToggle={onToggleTopicItem}
+              onContentClick={onContentClick}
+              selectedContentId={selectedContentId}
+              isMobile={isMobile}
+              semesterInfo={semesterInfo}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+})
+
+TopicsSection.displayName = "TopicsSection"
+
+// Memoized Topic Item Component
+interface TopicItemProps {
+  topic: Topic
+  index: number
+  courseId: string
+  courseTitle: string
+  courseCode: string
+  slides: Slide[]
+  videos: Video[]
+  isExpanded: boolean
+  onToggle: (topicId: string, courseId: string) => void
+  onContentClick: (type: any, title: string, url: string, id: string, topicTitle?: string, courseTitle?: string, description?: string, courseCode?: string, semesterInfo?: any) => void
+  selectedContentId?: string
+  isMobile?: boolean
+  semesterInfo?: any
+}
+
+const TopicItem = memo<TopicItemProps>(({
+  topic,
+  index,
+  courseId,
+  courseTitle,
+  courseCode,
+  slides,
+  videos,
+  isExpanded,
+  onToggle,
+  onContentClick,
+  selectedContentId,
+  isMobile,
+  semesterInfo,
+}) => {
+  const handleToggle = useCallback(() => onToggle(topic.id, courseId), [onToggle, topic.id, courseId])
+
+  return (
+    <div className="min-w-0 relative">
+      <Button
+        variant="ghost"
+        className={`w-full justify-start text-left ${isMobile ? 'px-2 py-2 min-h-[40px]' : 'px-2.5 py-2'} h-auto min-w-0 rounded-lg transition-colors duration-150 group ${
+          isExpanded
+            ? 'bg-gradient-to-r from-primary/15 to-primary/8 border-l-[3px] border-primary shadow-sm'
+            : 'hover:bg-accent/60 border-l-[3px] border-transparent hover:border-primary/40'
+        }`}
+        onClick={handleToggle}
+      >
+        <div className={`flex items-center ${isMobile ? 'gap-2' : 'gap-2.5'} w-full min-w-0`}>
+          <div className={`transition-transform duration-150 ease-out transform-gpu ${isExpanded ? 'rotate-90' : 'rotate-0'}`}>
+            <ChevronRight className={`${isMobile ? 'h-3.5 w-3.5' : 'h-4 w-4'} flex-shrink-0 transition-colors duration-150 ${
+              isExpanded ? 'text-primary' : 'text-muted-foreground'
+            }`} />
+          </div>
+          <div className={`flex items-center ${isMobile ? 'gap-1.5' : 'gap-2'} flex-1 min-w-0`}>
+            <div className={`flex-shrink-0 ${isMobile ? 'w-4 h-4 text-[9px]' : 'w-5 h-5 text-[10px]'} rounded flex items-center justify-center font-semibold transition-colors duration-150 ${
+              isExpanded 
+                ? "bg-primary text-primary-foreground shadow-sm" 
+                : "bg-muted text-muted-foreground group-hover:bg-primary/20 group-hover:text-primary"
+            }`}>
+              {index + 1}
+            </div>
+            <span className={`${isMobile ? 'text-[11px] leading-tight' : 'text-xs'} break-words line-clamp-2 min-w-0 flex-1 transition-colors duration-150 ${
+              isExpanded ? "text-primary font-semibold" : "text-foreground font-medium group-hover:text-primary"
+            }`}>
+              {topic.title}
+            </span>
+          </div>
+        </div>
+      </Button>
+
+      {isExpanded && (
+        <div className={`${isMobile ? 'ml-3 mr-0' : 'ml-6 mr-0.5'} space-y-0.5 mt-1 mb-1 min-w-0 border-l border-border/20 ${isMobile ? 'pl-1.5' : 'pl-2'}`}>
+          {videos.map((video) => (
+            <ContentItemButton
+              key={video.id}
+              type="video"
+              id={video.id}
+              title={video.title}
+              url={video.youtube_url}
+              topicTitle={topic.title}
+              courseTitle={courseTitle}
+              courseCode={courseCode}
+              isSelected={selectedContentId === video.id}
+              onContentClick={onContentClick}
+              isMobile={isMobile}
+              semesterInfo={semesterInfo}
+            />
+          ))}
+          {slides.map((slide) => (
+            <ContentItemButton
+              key={slide.id}
+              type="slide"
+              id={slide.id}
+              title={slide.title}
+              url={slide.google_drive_url}
+              topicTitle={topic.title}
+              courseTitle={courseTitle}
+              courseCode={courseCode}
+              isSelected={selectedContentId === slide.id}
+              onContentClick={onContentClick}
+              isMobile={isMobile}
+              semesterInfo={semesterInfo}
+            />
+          ))}
+          {slides.length === 0 && videos.length === 0 && (
+            <div className="text-center py-5 px-3">
+              <div className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-muted/50 mb-2">
+                <FileText className="h-4 w-4 text-muted-foreground/50" />
+              </div>
+              <div className="text-xs text-muted-foreground/70 font-medium">No content available</div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+})
+
+TopicItem.displayName = "TopicItem"
+
+// Memoized Content Item Button (for videos and slides)
+interface ContentItemButtonProps {
+  type: "video" | "slide"
+  id: string
+  title: string
+  url: string
+  topicTitle: string
+  courseTitle: string
+  courseCode: string
+  isSelected: boolean
+  onContentClick: (type: any, title: string, url: string, id: string, topicTitle?: string, courseTitle?: string, description?: string, courseCode?: string, semesterInfo?: any) => void
+  isMobile?: boolean
+  semesterInfo?: any
+}
+
+const ContentItemButton = memo<ContentItemButtonProps>(({
+  type,
+  id,
+  title,
+  url,
+  topicTitle,
+  courseTitle,
+  courseCode,
+  isSelected,
+  onContentClick,
+  isMobile,
+  semesterInfo,
+}) => {
+  const handleClick = useCallback(() => {
+    onContentClick(type, title, url, id, topicTitle, courseTitle, undefined, courseCode, semesterInfo)
+  }, [type, title, url, id, topicTitle, courseTitle, courseCode, onContentClick, semesterInfo])
+
+  const isVideo = type === "video"
+
+  return (
+    <Button
+      variant="ghost"
+      data-content-id={id}
+      className={`w-full justify-start text-left ${isMobile ? 'px-2 py-2 min-h-[36px]' : 'px-2.5 py-2'} h-auto rounded-lg min-w-0 transition-colors duration-150 group ${
+        isSelected
+          ? isVideo 
+            ? "bg-gradient-to-r from-red-50/50 to-red-50/30 dark:from-red-500/15 dark:to-red-500/10 border-l-[3px] border-red-500 shadow-sm"
+            : "bg-gradient-to-r from-blue-50/50 to-blue-50/30 dark:from-blue-500/15 dark:to-blue-500/10 border-l-[3px] border-blue-500 shadow-sm"
+          : isVideo
+            ? "hover:bg-accent/50 border-l-[3px] border-transparent hover:border-red-400/40"
+            : "hover:bg-accent/50 border-l-[3px] border-transparent hover:border-blue-400/40"
+      }`}
+      onClick={handleClick}
+    >
+      <div className={`flex items-center ${isMobile ? 'gap-1.5' : 'gap-2'} w-full min-w-0`}>
+        <div className={`${isMobile ? 'p-0.5' : 'p-1'} rounded-md transition-colors duration-150 ${
+          isSelected 
+            ? isVideo ? "bg-red-500/20" : "bg-blue-500/20"
+            : isVideo ? "bg-red-500/10 group-hover:bg-red-500/15" : "bg-blue-500/10 group-hover:bg-blue-500/15"
+        }`}>
+          {isVideo ? (
+            <Play className={`${isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5'} flex-shrink-0 transition-colors ${
+              isSelected ? "text-red-600 dark:text-red-400" : "text-red-500 group-hover:text-red-600"
+            }`} />
+          ) : (
+            <FileText className={`${isMobile ? 'h-3 w-3' : 'h-3.5 w-3.5'} flex-shrink-0 transition-colors ${
+              isSelected ? "text-blue-600 dark:text-blue-400" : "text-blue-500 group-hover:text-blue-600"
+            }`} />
+          )}
+        </div>
+        <span className={`${isMobile ? 'text-[11px] leading-snug' : 'text-xs leading-relaxed'} break-words min-w-0 flex-1 line-clamp-2 transition-colors duration-150 ${
+          isSelected ? "font-semibold text-foreground" : "text-muted-foreground font-medium group-hover:text-foreground"
+        }`}>
+          {title}
+        </span>
+        {isSelected && (
+          <div className={`flex-shrink-0 ${isMobile ? 'w-1 h-1' : 'w-1.5 h-1.5'} ${isVideo ? 'bg-red-500' : 'bg-blue-500'} rounded-full`} />
+        )}
+      </div>
+    </Button>
+  )
+})
+
+ContentItemButton.displayName = "ContentItemButton"

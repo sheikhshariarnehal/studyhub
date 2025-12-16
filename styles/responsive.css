@@ -283,45 +283,64 @@
   transform: scale(0.99);
 }
 
-/* Course content expansion animation */
+/* GPU Acceleration for sidebar animations */
+.transform-gpu {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+/* Optimized will-change for interactive elements */
+.sidebar-item-professional,
+.content-item {
+  will-change: transform, background-color;
+}
+
+/* Course content expansion animation - GPU accelerated */
 .course-expand-enter {
-  animation: courseExpand 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: courseExpand 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 @keyframes courseExpand {
   from {
     opacity: 0;
     max-height: 0;
-    transform: translateY(-8px);
+    transform: translate3d(0, -8px, 0);
   }
   to {
     opacity: 1;
     max-height: 2000px;
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
-/* Optimized topic list animation */
+/* Optimized topic list animation - GPU accelerated */
 .topic-list-expand {
-  animation: topicListExpand 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: topicListExpand 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  transform: translateZ(0);
+  contain: layout style;
 }
 
 @keyframes topicListExpand {
   from {
     opacity: 0;
     max-height: 0;
-    transform: translateY(-8px);
+    transform: translate3d(0, -8px, 0);
   }
   to {
     opacity: 1;
     max-height: 3000px;
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
 }
 
-/* Optimized topic content animation */
+/* Optimized topic content animation - GPU accelerated */
 .topic-content-expand {
-  animation: topicContentExpand 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: topicContentExpand 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  transform: translateZ(0);
+  contain: layout style;
 }
 
 @keyframes topicContentExpand {
