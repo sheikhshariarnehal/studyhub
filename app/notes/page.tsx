@@ -120,6 +120,37 @@ export default function NotesPage() {
     window.open(contentUrl, "_blank", "noopener,noreferrer")
   }
 
+  const handleDownload = async (noteId: string, contentUrl: string) => {
+    // Track download count in the background
+    try {
+      await fetch("/api/notes/download", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ noteId })
+      })
+
+      // Update local state optimistically
+      setNotes((prevNotes) =>
+        prevNotes.map((note) =>
+          note.id === noteId ? { ...note, download_count: (note.download_count || 0) + 1 } : note
+        )
+      )
+      setFilteredNotes((prevNotes) =>
+        prevNotes.map((note) =>
+          note.id === noteId ? { ...note, download_count: (note.download_count || 0) + 1 } : note
+        )
+      )
+    } catch (error) {
+      console.error("Failed to track download:", error)
+      // Continue with download even if tracking fails
+    }
+
+    // Open the file for download/view
+    window.open(contentUrl, "_blank", "noopener,noreferrer")
+  }
+
   const clearFilters = () => {
     setSearchQuery("")
     setExamTypeFilter("all")
@@ -388,7 +419,7 @@ export default function NotesPage() {
                       size="default"
                       variant="outline"
                       className="flex-1 group/download text-sm font-medium h-9"
-                      onClick={() => handleViewNote(note.content_url)}
+                      onClick={() => handleDownload(note.id, note.content_url)}
                     >
                       <Download className="h-4 w-4 mr-1.5 group-hover/download:translate-y-0.5 transition-transform duration-300" />
                       <span>Download</span>
