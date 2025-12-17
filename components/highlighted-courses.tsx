@@ -79,7 +79,7 @@ export function HighlightedCourses({ onCourseSelect, className = "" }: Highlight
       <Card className={`${className}`}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Star className="h-5 w-5 text-yellow-600 fill-yellow-600" />
+            <Star className="h-5 w-5 text-emerald-500 fill-emerald-500 dark:text-[#78A083] dark:fill-[#78A083]" />
             Featured Courses
           </CardTitle>
         </CardHeader>
@@ -97,7 +97,7 @@ export function HighlightedCourses({ onCourseSelect, className = "" }: Highlight
       <Card className={`${className}`}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Star className="h-5 w-5 text-yellow-600 fill-yellow-600" />
+            <Star className="h-5 w-5 text-emerald-500 fill-emerald-500 dark:text-[#78A083] dark:fill-[#78A083]" />
             Featured Courses
           </CardTitle>
         </CardHeader>
@@ -118,7 +118,7 @@ export function HighlightedCourses({ onCourseSelect, className = "" }: Highlight
     <Card className={`${className}`}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Star className="h-5 w-5 text-yellow-600 fill-yellow-600" />
+          <Star className="h-5 w-5 text-emerald-500 fill-emerald-500 dark:text-[#78A083] dark:fill-[#78A083]" />
           Featured Courses
           <Badge variant="secondary" className="ml-auto">
             {highlightedCourses.length}
@@ -132,10 +132,10 @@ export function HighlightedCourses({ onCourseSelect, className = "" }: Highlight
               <Card
                 key={course.id}
                 className="group cursor-pointer relative overflow-hidden
-                  border-l-4 border-l-blue-500 dark:border-l-blue-400
-                  bg-gradient-to-br from-blue-50/50 to-indigo-50/30 dark:from-blue-950/20 dark:to-indigo-950/10
+                  border-l-4 border-l-emerald-500 dark:border-l-[#50727B]
+                  bg-gradient-to-br from-emerald-50/50 via-teal-50/30 to-cyan-50/20 dark:from-[#344955]/30 dark:via-[#50727B]/20 dark:to-[#78A083]/10
                   shadow-sm hover:shadow-lg hover:-translate-y-0.5
-                  hover:border-gray-300 dark:hover:border-gray-600
+                  hover:border-emerald-400 dark:hover:border-[#78A083]
                   transition-all duration-200 ease-out
                   will-change-transform
                   active:scale-[0.98]"
@@ -160,14 +160,14 @@ export function HighlightedCourses({ onCourseSelect, className = "" }: Highlight
                               <h3 className="font-semibold text-lg text-gray-900 dark:text-white leading-tight tracking-tight">
                                 {course.title}
                               </h3>
-                              <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                              <Star className="h-4 w-4 text-emerald-500 fill-emerald-500 dark:text-[#78A083] dark:fill-[#78A083]" />
                             </div>
                             <div className="flex items-center gap-3">
                               <Badge
                                 variant="secondary"
                                 className="text-xs font-medium px-2.5 py-1
-                                  bg-blue-100 text-blue-800 border-blue-200
-                                  dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800"
+                                  bg-emerald-100 text-emerald-800 border-emerald-200
+                                  dark:bg-[#344955]/50 dark:text-[#78A083] dark:border-[#50727B]/50"
                               >
                                 {course.course_code}
                               </Badge>

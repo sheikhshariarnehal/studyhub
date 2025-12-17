@@ -900,7 +900,7 @@ const CourseItem = memo<CourseItemProps>(
         }`}>
           <div className={`${isMobile ? 'p-3' : 'p-3'} rounded-xl ${
             course.is_highlighted 
-              ? 'bg-gradient-to-br from-amber-50/80 to-amber-100/50 dark:from-amber-900/20 dark:to-amber-800/10 border-l-4 border-amber-400 dark:border-amber-600' 
+              ? 'bg-gradient-to-br from-emerald-50/60 via-teal-50/40 to-cyan-50/30 dark:from-[#344955]/40 dark:via-[#50727B]/25 dark:to-[#78A083]/15 border-l-4 border-emerald-500 dark:border-[#50727B] ring-1 ring-emerald-200/50 dark:ring-[#50727B]/30' 
               : ''
           }`}>
             <Button
@@ -932,9 +932,9 @@ const CourseItem = memo<CourseItemProps>(
                           {course.title}
                         </h4>
                         {course.is_highlighted && (
-                          <div className="flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/20 rounded-md">
-                            <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
-                            <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400">Featured</span>
+                          <div className="flex-shrink-0 flex items-center gap-1.5 px-2 py-0.5 bg-gradient-to-r from-emerald-500/15 to-teal-500/10 dark:from-[#50727B]/30 dark:to-[#78A083]/20 rounded-md border border-emerald-300/40 dark:border-[#50727B]/40">
+                            <div className="w-1.5 h-1.5 bg-emerald-500 dark:bg-[#78A083] rounded-full animate-pulse"></div>
+                            <span className="text-[10px] font-semibold text-emerald-700 dark:text-[#78A083]">On</span>
                           </div>
                         )}
                       </div>
@@ -956,9 +956,9 @@ const CourseItem = memo<CourseItemProps>(
                           {course.title}
                         </h4>
                         {course.is_highlighted && (
-                          <div className="flex-shrink-0 flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/20 rounded-md">
-                            <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
-                            <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400">Featured</span>
+                          <div className="flex-shrink-0 flex items-center gap-1.5 px-2 py-0.5 bg-gradient-to-r from-emerald-500/15 to-teal-500/10 dark:from-[#50727B]/30 dark:to-[#78A083]/20 rounded-md border border-emerald-300/40 dark:border-[#50727B]/40">
+                            <div className="w-1.5 h-1.5 bg-emerald-500 dark:bg-[#78A083] rounded-full animate-pulse"></div>
+                            <span className="text-[10px] font-semibold text-emerald-700 dark:text-[#78A083]">Live</span>
                           </div>
                         )}
                       </div>

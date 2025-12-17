@@ -148,16 +148,16 @@ export const OptimizedCourseItem = memo(({ course, onContentSelect, selectedCont
         will-change-transform
         hover:shadow-lg hover:-translate-y-0.5
         ${course.is_highlighted
-          ? `border-l-4 border-l-blue-500 dark:border-l-blue-400
-             bg-gradient-to-br from-blue-50/50 to-indigo-50/30 dark:from-blue-950/20 dark:to-indigo-950/10
-             shadow-sm hover:shadow-md hover:border-gray-300 dark:hover:border-gray-600`
+          ? `border-l-4 border-l-emerald-500 dark:border-l-[#50727B]
+             bg-gradient-to-br from-emerald-50/50 via-teal-50/30 to-cyan-50/20 dark:from-[#344955]/30 dark:via-[#50727B]/20 dark:to-[#78A083]/10
+             shadow-sm hover:shadow-md hover:border-emerald-400 dark:hover:border-[#78A083]`
           : `border-l-4 border-l-transparent hover:border-l-primary/20
              bg-card hover:bg-muted/50 shadow-sm hover:shadow-md`
         }
       `}>
         {/* Gradient overlay for highlighted courses */}
         {course.is_highlighted && (
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-indigo-500/5 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-teal-500/5 dark:from-[#50727B]/10 dark:to-[#78A083]/5 pointer-events-none" />
         )}
 
         <div className="relative p-4 sm:p-6">
@@ -171,7 +171,7 @@ export const OptimizedCourseItem = memo(({ course, onContentSelect, selectedCont
               {/* Course Icon */}
               <div className={`rounded-lg flex items-center justify-center shrink-0 w-12 h-12 ${
                 course.is_highlighted
-                  ? 'bg-blue-600 dark:bg-blue-500'
+                  ? 'bg-emerald-600 dark:bg-[#50727B]'
                   : 'bg-primary'
               }`}>
                 <BookOpen className="h-6 w-6 text-white" />
@@ -184,7 +184,7 @@ export const OptimizedCourseItem = memo(({ course, onContentSelect, selectedCont
                     {course.title}
                   </h3>
                   {course.is_highlighted && (
-                    <Star className="h-4 w-4 text-yellow-500 fill-yellow-500 shrink-0" />
+                    <Star className="h-4 w-4 text-emerald-500 fill-emerald-500 dark:text-[#78A083] dark:fill-[#78A083] shrink-0" />
                   )}
                 </div>
 
@@ -208,13 +208,13 @@ export const OptimizedCourseItem = memo(({ course, onContentSelect, selectedCont
                 {courseData && (
                   <div className={`flex flex-wrap gap-3 mt-3 ${
                     course.is_highlighted
-                      ? `p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600`
+                      ? `p-3 rounded-lg bg-emerald-50/50 dark:bg-[#344955]/40 border border-emerald-200/50 dark:border-[#50727B]/30`
                       : ''
                   }`}>
                     <div className="flex items-center gap-2">
                       <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
                         course.is_highlighted
-                          ? 'bg-blue-600 dark:bg-blue-500'
+                          ? 'bg-emerald-600 dark:bg-[#50727B]'
                           : 'bg-slate-600 dark:bg-[#344955]'
                       }`}>
                         <BookOpen className="h-3 w-3 text-white" />
@@ -222,14 +222,14 @@ export const OptimizedCourseItem = memo(({ course, onContentSelect, selectedCont
                       <div>
                         <span className={`text-sm font-bold leading-none ${
                           course.is_highlighted
-                            ? 'text-blue-900 dark:text-blue-100'
+                            ? 'text-emerald-900 dark:text-[#78A083]'
                             : 'text-slate-300 dark:text-slate-400'
                         }`}>
                           {courseData.length}
                         </span>
                         <p className={`text-xs font-medium ${
                           course.is_highlighted
-                            ? 'text-blue-700 dark:text-blue-300'
+                            ? 'text-emerald-700 dark:text-[#78A083]/80'
                             : 'text-slate-400 dark:text-slate-500'
                         }`}>
                           Topics
@@ -245,7 +245,7 @@ export const OptimizedCourseItem = memo(({ course, onContentSelect, selectedCont
                         <div className="flex items-center gap-2">
                           <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
                             course.is_highlighted
-                              ? 'bg-green-600 dark:bg-green-500'
+                              ? 'bg-teal-600 dark:bg-[#78A083]'
                               : 'bg-slate-600 dark:bg-[#344955]'
                           }`}>
                             <Calendar className="h-3 w-3 text-white" />
@@ -253,14 +253,14 @@ export const OptimizedCourseItem = memo(({ course, onContentSelect, selectedCont
                           <div>
                             <span className={`text-sm font-bold leading-none ${
                               course.is_highlighted
-                                ? 'text-green-900 dark:text-green-100'
+                                ? 'text-teal-900 dark:text-[#78A083]'
                                 : 'text-slate-300 dark:text-slate-400'
                             }`}>
                               {totalSlides}
                             </span>
                             <p className={`text-xs font-medium ${
                               course.is_highlighted
-                                ? 'text-green-700 dark:text-green-300'
+                                ? 'text-teal-700 dark:text-[#78A083]/80'
                                 : 'text-slate-400 dark:text-slate-500'
                             }`}>
                               Slides

@@ -174,7 +174,7 @@ export const EnhancedCourseCard = memo(({
         "will-change-transform",
         "hover:shadow-lg hover:-translate-y-0.5",
         course.is_highlighted
-          ? "border-l-4 border-l-blue-500 dark:border-l-blue-400 bg-gradient-to-br from-blue-50/50 to-indigo-50/30 dark:from-blue-950/20 dark:to-indigo-950/10"
+          ? "border-l-4 border-l-emerald-500 dark:border-l-[#50727B] bg-gradient-to-br from-emerald-50/50 via-teal-50/30 to-cyan-50/20 dark:from-[#344955]/30 dark:via-[#50727B]/20 dark:to-[#78A083]/10"
           : "border-l-4 border-l-transparent hover:border-l-primary/20",
         "cursor-pointer",
         className
@@ -185,7 +185,7 @@ export const EnhancedCourseCard = memo(({
     >
       {/* Gradient overlay for highlighted courses */}
       {course.is_highlighted && (
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-indigo-500/5 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-teal-500/5 dark:from-[#50727B]/10 dark:to-[#78A083]/5 pointer-events-none" />
       )}
 
       <CardHeader className={cn("relative", cardVariants[variant])}>
@@ -195,7 +195,7 @@ export const EnhancedCourseCard = memo(({
             <div className={cn(
               "rounded-lg flex items-center justify-center shrink-0",
               course.is_highlighted 
-                ? "bg-blue-600 dark:bg-blue-500" 
+                ? "bg-emerald-600 dark:bg-[#50727B]" 
                 : "bg-primary",
               variant === "compact" ? "w-10 h-10" : "w-12 h-12"
             )}>
@@ -215,7 +215,7 @@ export const EnhancedCourseCard = memo(({
                   {course.title}
                 </h3>
                 {course.is_highlighted && (
-                  <Star className="h-4 w-4 text-yellow-500 fill-yellow-500 shrink-0" />
+                  <Star className="h-4 w-4 text-emerald-500 fill-emerald-500 dark:text-[#78A083] dark:fill-[#78A083] shrink-0" />
                 )}
               </div>
 

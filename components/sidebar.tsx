@@ -380,7 +380,7 @@ export function Sidebar({ onContentSelect }: SidebarProps) {
                               {course.title}
                             </div>
                             {course.is_highlighted && (
-                              <Star className="h-4 w-4 text-amber-500 fill-amber-500 drop-shadow-sm dark:drop-shadow-[0_2px_4px_rgba(245,158,11,0.4)]" />
+                              <Star className="h-4 w-4 text-emerald-500 fill-emerald-500 drop-shadow-sm dark:text-[#78A083] dark:fill-[#78A083] dark:drop-shadow-[0_2px_4px_rgba(120,160,131,0.4)]" />
                             )}
                           </div>
                           <div className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold ${
