@@ -10,6 +10,7 @@ export async function GET(request: Request) {
     const type = searchParams.get("type")
     const courseId = searchParams.get("courseId")
     const examType = searchParams.get("examType")
+    const semester = searchParams.get("semester")
     const search = searchParams.get("search")
     const page = parseInt(searchParams.get("page") || "1")
     const limit = parseInt(searchParams.get("limit") || "20")
@@ -41,6 +42,10 @@ export async function GET(request: Request) {
 
     if (examType && examType !== "all") {
       query = query.eq("exam_type", examType)
+    }
+
+    if (semester) {
+      query = query.eq("semester_name", semester)
     }
 
     if (search) {

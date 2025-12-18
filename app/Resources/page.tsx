@@ -150,11 +150,13 @@ export default function ResourcesPage() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [selectedCourse, setSelectedCourse] = useState<string>("")
   const [selectedExamType, setSelectedExamType] = useState<string>("")
+  const [selectedSemester, setSelectedSemester] = useState<string>("")
   
   // Collapsible sections
   const [typeSectionOpen, setTypeSectionOpen] = useState(true)
   const [courseSectionOpen, setCourseSectionOpen] = useState(true)
   const [examTypeSectionOpen, setExamTypeSectionOpen] = useState(true)
+  const [semesterSectionOpen, setSemesterSectionOpen] = useState(true)
 
   // Debounce search
   useEffect(() => {
@@ -175,6 +177,7 @@ export default function ResourcesPage() {
       }
       if (selectedCourse) params.append("courseId", selectedCourse)
       if (selectedExamType) params.append("examType", selectedExamType)
+      if (selectedSemester) params.append("semester", selectedSemester)
       if (debouncedSearch) params.append("search", debouncedSearch)
       params.append("page", pagination.page.toString())
       params.append("limit", pagination.limit.toString())
@@ -199,7 +202,7 @@ export default function ResourcesPage() {
     } finally {
       setLoading(false)
     }
-  }, [selectedTypes, selectedCourse, selectedExamType, debouncedSearch, pagination.page, pagination.limit])
+  }, [selectedTypes, selectedCourse, selectedExamType, selectedSemester, debouncedSearch, pagination.page, pagination.limit])
 
   useEffect(() => {
     fetchResources()
@@ -220,13 +223,14 @@ export default function ResourcesPage() {
     setSelectedTypes([])
     setSelectedCourse("")
     setSelectedExamType("")
+    setSelectedSemester("")
     setSearchQuery("")
     setDebouncedSearch("")
     setPagination(prev => ({ ...prev, page: 1 }))
   }
 
   // Count active filters
-  const activeFilterCount = selectedTypes.length + (selectedCourse ? 1 : 0) + (selectedExamType ? 1 : 0)
+  const activeFilterCount = selectedTypes.length + (selectedCourse ? 1 : 0) + (selectedExamType ? 1 : 0) + (selectedSemester ? 1 : 0)
 
   // Create URL-friendly slug from title
   const createSlug = (title: string) => {
@@ -428,6 +432,52 @@ export default function ResourcesPage() {
                   {examTypeLabels[examType] || examType}
                 </button>
               ))}
+            </div>
+          )}
+        </div>
+
+        <Separator className="my-4" />
+
+        {/* Semester Filter */}
+        <div className="mb-6">
+          <button
+            onClick={() => setSemesterSectionOpen(!semesterSectionOpen)}
+            className="flex items-center justify-between w-full py-2 text-sm font-medium hover:text-primary transition-colors"
+          >
+            <span>Semester</span>
+            {semesterSectionOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+          {semesterSectionOpen && (
+            <div className="mt-2 space-y-2">
+              {["Fall", "Summer", "Spring"].map((season) => {
+                const currentYear = new Date().getFullYear()
+                const shortYear = currentYear % 100
+                const semesterValue = `${season} ${shortYear}`
+                const isSelected = selectedSemester === semesterValue
+                
+                return (
+                  <label
+                    key={season}
+                    className={cn(
+                      "flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all",
+                      isSelected 
+                        ? "bg-primary/10 border border-primary/30" 
+                        : "hover:bg-muted"
+                    )}
+                  >
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={() => {
+                        setSelectedSemester(isSelected ? "" : semesterValue)
+                        setPagination(prev => ({ ...prev, page: 1 }))
+                      }}
+                      className="data-[state=checked]:bg-primary"
+                    />
+                    <Calendar className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm flex-1">{season}</span>
+                  </label>
+                )
+              })}
             </div>
           )}
         </div>

@@ -62,6 +62,7 @@ interface Resource {
   file_size_mb: number | null
   file_format: string | null
   academic_year: string | null
+  semester_name: string | null
   is_downloadable: boolean
   download_count: number
   view_count: number
@@ -700,8 +701,18 @@ export default function ResourceViewPage() {
                       </span>
                     </div>
 
+                    {resource.semester_name && (
+                      <div className="flex items-center gap-3">
+                        <Calendar className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm">
+                          <span className="text-muted-foreground">Semester:</span>{" "}
+                          <span className="font-medium">{resource.semester_name}</span>
+                        </span>
+                      </div>
+                    )}
+
                     <div className="flex items-center gap-3">
-                      <Calendar className="w-4 h-4 text-muted-foreground" />
+                      <Clock className="w-4 h-4 text-muted-foreground" />
                       <span className="text-sm">
                         <span className="text-muted-foreground">Added:</span>{" "}
                         <span className="font-medium">{formatRelativeTime(resource.created_at)}</span>
