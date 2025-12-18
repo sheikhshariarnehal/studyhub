@@ -82,15 +82,9 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-8">
       {/* Stats Section */}
-      <div>
-        <div className="flex items-center gap-2 mb-4">
-          <TrendingUp className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-semibold">Platform Overview</h2>
-        </div>
-        <Suspense fallback={<DashboardLoading />}>
-          <DashboardStats />
-        </Suspense>
-      </div>
+      <Suspense fallback={<DashboardLoading />}>
+        <DashboardStats />
+      </Suspense>
 
       {/* Content Grid */}
       <div className="grid gap-6 lg:grid-cols-7">
