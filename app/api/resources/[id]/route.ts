@@ -12,76 +12,71 @@ export async function GET(
     const { id } = await params
     const supabase = createClient()
 
-    // Try to fetch by ID first
-    let query = supabase
-      .from("study_tools")
-      .select(`
-        *,
-        course:courses (
+    // Base select query
+    const selectQuery = `
+      *,
+      course:courses (
+        id,
+        title,
+        course_code,
+        teacher_name,
+        description,
+        credits,
+        semester:semesters (
           id,
           title,
-          course_code,
-          teacher_name,
-          description,
-          credits,
-          semester:semesters (
-            id,
-            title,
-            section
-          )
+          section
         )
-      `)
+      )
+    `
 
-    // Check if id is a UUID or a slug
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+    // Check if id is a full UUID
+    const isFullUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
     
-    if (isUUID) {
-      query = query.eq("id", id)
+    // Check if id ends with a short UUID (8 chars) - format: title-slug-shortid
+    const shortIdMatch = id.match(/-([0-9a-f]{8})$/i)
+    
+    let resource = null
+    let error = null
+
+    if (isFullUUID) {
+      // Direct UUID lookup
+      const result = await supabase
+        .from("study_tools")
+        .select(selectQuery)
+        .eq("id", id)
+        .single()
+      resource = result.data
+      error = result.error
+    } else if (shortIdMatch) {
+      // Extract short ID and construct the UUID pattern to search
+      const shortId = shortIdMatch[1]
+      
+      // Fetch all study_tools and filter by ID prefix (workaround for UUID type)
+      const result = await supabase
+        .from("study_tools")
+        .select(selectQuery)
+      
+      if (result.data) {
+        resource = result.data.find(item => item.id.startsWith(shortId))
+      }
+      error = result.error
     } else {
-      // Try to find by title slug
+      // Fallback: try to find by title slug
       const decodedSlug = decodeURIComponent(id).replace(/-/g, " ")
-      query = query.ilike("title", `%${decodedSlug}%`)
+      const result = await supabase
+        .from("study_tools")
+        .select(selectQuery)
+        .ilike("title", `%${decodedSlug}%`)
+        .limit(1)
+      resource = result.data?.[0]
+      error = result.error
     }
 
-    const { data: resource, error } = await query.single()
-
-    if (error) {
+    if (error || !resource) {
       console.error("Error fetching resource:", error)
-      
-      // If single() failed, try to get the first match
-      if (!isUUID) {
-        const decodedSlug = decodeURIComponent(id).replace(/-/g, " ")
-        const { data: resources, error: listError } = await supabase
-          .from("study_tools")
-          .select(`
-            *,
-            course:courses (
-              id,
-              title,
-              course_code,
-              teacher_name,
-              description,
-              credits,
-              semester:semesters (
-                id,
-                title,
-                section
-              )
-            )
-          `)
-          .ilike("title", `%${decodedSlug}%`)
-          .limit(1)
-
-        if (!listError && resources && resources.length > 0) {
-          return NextResponse.json({
-            success: true,
-            resource: resources[0]
-          })
-        }
-      }
-
       return NextResponse.json(
-        { error: "Resource not found", details: error.message },
+        { error: "Resource not found", details: error?.message },
         { status: 404 }
       )
     }

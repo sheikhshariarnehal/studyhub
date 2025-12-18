@@ -227,9 +227,20 @@ export default function ResourcesPage() {
   // Count active filters
   const activeFilterCount = selectedTypes.length + (selectedCourse ? 1 : 0) + (selectedExamType ? 1 : 0)
 
-  // Open resource - Navigate to detail page
+  // Create URL-friendly slug from title
+  const createSlug = (title: string) => {
+    return title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+      .replace(/\s+/g, '-') // Replace spaces with hyphens
+      .replace(/-+/g, '-') // Replace multiple hyphens with single
+      .trim()
+  }
+
+  // Open resource - Navigate to detail page using title slug
   const openResource = (resource: Resource) => {
-    router.push(`/Resources/${resource.id}`)
+    const slug = createSlug(resource.title)
+    router.push(`/Resources/${slug}-${resource.id.slice(0, 8)}`)
   }
 
   // Format date
