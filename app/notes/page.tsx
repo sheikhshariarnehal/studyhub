@@ -1,16 +1,29 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Header } from "@/components/header"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { FileText, Download, Eye, Search, Filter, BookOpen, Calendar, ExternalLink, AlertCircle } from "lucide-react"
+import { 
+  FileText, 
+  Download, 
+  Search, 
+  Filter, 
+  AlertCircle,
+  Clock,
+  LayoutGrid,
+  List,
+  RefreshCw,
+  X,
+  BookMarked,
+  FolderOpen
+} from "lucide-react"
 import { ExamNote } from "@/lib/types/notes"
+import { cn } from "@/lib/utils"
 
 export default function NotesPage() {
   const [mounted, setMounted] = useState(false)
@@ -18,11 +31,13 @@ export default function NotesPage() {
   const [filteredNotes, setFilteredNotes] = useState<ExamNote[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   
   // Filter states
   const [searchQuery, setSearchQuery] = useState("")
   const [examTypeFilter, setExamTypeFilter] = useState("all")
   const [semesterFilter, setSemesterFilter] = useState("all")
+  const [courseFilter, setCourseFilter] = useState("all")
 
   // Handle hydration
   useEffect(() => {
@@ -30,8 +45,25 @@ export default function NotesPage() {
   }, [])
   
   // Extract unique values for filters
-  const semesters = Array.from(new Set(notes.map((n) => n.semester_title).filter(Boolean))) as string[]
-  const examTypes = Array.from(new Set(notes.map((n) => n.exam_type).filter(Boolean))) as string[]
+  const semesters = useMemo(() => 
+    Array.from(new Set(notes.map((n) => n.semester_title).filter(Boolean))) as string[]
+  , [notes])
+  
+  const examTypes = useMemo(() => 
+    Array.from(new Set(notes.map((n) => n.exam_type).filter(Boolean))) as string[]
+  , [notes])
+
+  const courses = useMemo(() => 
+    Array.from(new Set(notes.map((n) => n.course_code).filter(Boolean))) as string[]
+  , [notes])
+
+  // Statistics
+  const stats = useMemo(() => ({
+    totalNotes: notes.length,
+    totalDownloads: notes.reduce((acc, n) => acc + (n.download_count || 0), 0),
+    totalCourses: courses.length,
+    totalSemesters: semesters.length,
+  }), [notes, courses, semesters])
 
   // Fetch notes from API
   useEffect(() => {
@@ -62,8 +94,12 @@ export default function NotesPage() {
       filtered = filtered.filter((note) => note.semester_title === semesterFilter)
     }
 
+    if (courseFilter !== "all") {
+      filtered = filtered.filter((note) => note.course_code === courseFilter)
+    }
+
     setFilteredNotes(filtered)
-  }, [searchQuery, examTypeFilter, semesterFilter, notes])
+  }, [searchQuery, examTypeFilter, semesterFilter, courseFilter, notes])
 
   const fetchNotes = async () => {
     try {
@@ -99,20 +135,44 @@ export default function NotesPage() {
     }
   }
 
-  const getExamTypeBadgeColor = (examType: string) => {
+  const getExamTypeConfig = (examType: string) => {
     switch (examType) {
       case "midterm":
-        return "bg-blue-500/10 text-blue-500 hover:bg-blue-500/20"
+        return { 
+          color: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+          icon: "📝",
+          label: "Midterm"
+        }
       case "final":
-        return "bg-purple-500/10 text-purple-500 hover:bg-purple-500/20"
+        return { 
+          color: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
+          icon: "🎯",
+          label: "Final"
+        }
       case "both":
-        return "bg-green-500/10 text-green-500 hover:bg-green-500/20"
+        return { 
+          color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+          icon: "📚",
+          label: "Both"
+        }
       case "assignment":
-        return "bg-orange-500/10 text-orange-500 hover:bg-orange-500/20"
+        return { 
+          color: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+          icon: "✍️",
+          label: "Assignment"
+        }
       case "quiz":
-        return "bg-pink-500/10 text-pink-500 hover:bg-pink-500/20"
+        return { 
+          color: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
+          icon: "⚡",
+          label: "Quiz"
+        }
       default:
-        return "bg-gray-500/10 text-gray-500 hover:bg-gray-500/20"
+        return { 
+          color: "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20",
+          icon: "📄",
+          label: examType
+        }
     }
   }
 
@@ -121,17 +181,13 @@ export default function NotesPage() {
   }
 
   const handleDownload = async (noteId: string, contentUrl: string) => {
-    // Track download count in the background
     try {
       await fetch("/api/notes/download", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ noteId })
       })
 
-      // Update local state optimistically
       setNotes((prevNotes) =>
         prevNotes.map((note) =>
           note.id === noteId ? { ...note, download_count: (note.download_count || 0) + 1 } : note
@@ -144,10 +200,8 @@ export default function NotesPage() {
       )
     } catch (error) {
       console.error("Failed to track download:", error)
-      // Continue with download even if tracking fails
     }
 
-    // Open the file for download/view
     window.open(contentUrl, "_blank", "noopener,noreferrer")
   }
 
@@ -155,7 +209,10 @@ export default function NotesPage() {
     setSearchQuery("")
     setExamTypeFilter("all")
     setSemesterFilter("all")
+    setCourseFilter("all")
   }
+
+  const hasActiveFilters = searchQuery || examTypeFilter !== "all" || semesterFilter !== "all" || courseFilter !== "all"
 
   // Prevent hydration mismatch
   if (!mounted) {
@@ -163,328 +220,411 @@ export default function NotesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/20">
       <Header />
       
-      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 max-w-7xl">
-        {/* Header Section */}
-        <div className="mb-6 sm:mb-8">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2.5 bg-gradient-to-br from-primary/20 to-primary/10 rounded-lg shadow-sm">
-              <BookOpen className="h-6 w-6 text-primary" />
+      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+        {/* Hero Section */}
+        <div className="mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <FileText className="h-5 w-5 text-primary" />
+                </div>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+                  Exam Notes
+                </h1>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Access study materials and exam resources
+              </p>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
-              Exam Notes
-            </h1>
+
+            {/* Quick Stats */}
+            {!loading && !error && notes.length > 0 && (
+              <div className="flex items-center gap-4 text-sm">
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <FileText className="h-4 w-4" />
+                  <span className="font-semibold text-foreground">{stats.totalNotes}</span> notes
+                </div>
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <Download className="h-4 w-4" />
+                  <span className="font-semibold text-foreground">{stats.totalDownloads}</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <BookMarked className="h-4 w-4" />
+                  <span className="font-semibold text-foreground">{stats.totalCourses}</span> courses
+                </div>
+              </div>
+            )}
           </div>
-          <p className="text-sm text-muted-foreground ml-12">
-            Access comprehensive study materials for all your courses
-          </p>
         </div>
 
-        {/* Filters Section */}
-        <Card className="mb-6 border shadow-sm">
-          <CardHeader className="pb-4">
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-primary" />
-              <CardTitle className="text-base font-semibold">Filter & Search</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {/* Search */}
-              <div className="relative sm:col-span-2 lg:col-span-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                <Input
-                  placeholder="Search notes, courses..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 h-10 text-sm"
-                />
-              </div>
-
-              {/* Exam Type Filter */}
-              <Select value={examTypeFilter} onValueChange={setExamTypeFilter}>
-                <SelectTrigger className="h-10 text-sm">
-                  <SelectValue placeholder="All Exam Types" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Exam Types</SelectItem>
-                  {examTypes.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type.charAt(0).toUpperCase() + type.slice(1)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {/* Semester Filter */}
-              <Select value={semesterFilter} onValueChange={setSemesterFilter}>
-                <SelectTrigger className="h-10 text-sm">
-                  <SelectValue placeholder="All Semesters" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Semesters</SelectItem>
-                  {semesters.map((semester) => (
-                    <SelectItem key={semester} value={semester}>
-                      {semester}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Active Filters Display */}
-            {(searchQuery || examTypeFilter !== "all" || semesterFilter !== "all") && (
-              <div className="flex items-center gap-2 pt-3 border-t flex-wrap">
-                <span className="text-xs text-muted-foreground">Active:</span>
-                {searchQuery && (
-                  <Badge variant="secondary" className="text-xs px-2.5 py-1">
-                    {searchQuery}
-                  </Badge>
-                )}
-                {examTypeFilter !== "all" && (
-                  <Badge variant="secondary" className="text-xs px-2.5 py-1">
-                    {examTypeFilter}
-                  </Badge>
-                )}
-                {semesterFilter !== "all" && (
-                  <Badge variant="secondary" className="text-xs px-2.5 py-1">
-                    {semesterFilter}
-                  </Badge>
-                )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearFilters}
-                  className="h-7 text-xs ml-auto px-3"
-                >
-                  Clear all
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Stats */}
-        {!loading && !error && (
-          <div className="mb-5 flex items-center justify-between text-sm text-muted-foreground">
-            <span>
-              Showing <span className="font-semibold text-foreground">{filteredNotes.length}</span> of{" "}
-              <span className="font-semibold text-foreground">{notes.length}</span> notes
-            </span>
-            {filteredNotes.length !== notes.length && (
-              <Badge variant="secondary" className="text-xs px-2 py-0.5">
-                Filtered
-              </Badge>
-            )}
-          </div>
-        )}
-
-        {/* Loading State */}
-        {loading && (
-          <div className="grid gap-5 sm:gap-6 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
-            {[...Array(6)].map((_, i) => (
-              <Card key={i}>
-                <CardHeader className="pb-4 space-y-2">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 space-y-1.5">
-                      <Skeleton className="h-5 w-full" />
-                      <Skeleton className="h-3 w-5/6" />
+        {/* Main Content Area */}
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Left Sidebar - Filters */}
+          <aside className="lg:w-60 shrink-0">
+            <div className="lg:sticky lg:top-20 space-y-4">
+              {/* Filters Card */}
+              <Card className="border shadow-sm">
+                <CardHeader className="pb-3 pt-4 px-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Filter className="h-4 w-4 text-primary" />
+                      <CardTitle className="text-sm font-semibold">Filters</CardTitle>
                     </div>
-                    <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3.5">
-                  <div className="px-3 py-2.5 bg-muted/30 rounded-lg">
-                    <Skeleton className="h-3 w-full" />
-                  </div>
-                  <div className="flex gap-2 flex-wrap">
-                    <Skeleton className="h-6 w-16" />
-                    <Skeleton className="h-6 w-20" />
-                    <Skeleton className="h-6 w-12" />
-                  </div>
-                  <div className="pt-3 border-t">
-                    <Skeleton className="h-3 w-full" />
-                  </div>
-                  <div className="pt-3.5 flex gap-2.5">
-                    <Skeleton className="h-9 flex-1 rounded-md" />
-                    <Skeleton className="h-9 flex-1 rounded-md" />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {/* Error State */}
-        {error && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              {error}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={fetchNotes}
-                className="ml-4"
-              >
-                Retry
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Notes Grid */}
-        {!loading && !error && filteredNotes.length > 0 && (
-          <div className="grid gap-5 sm:gap-6 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
-            {filteredNotes.map((note) => (
-              <Card 
-                key={note.id} 
-                className="group relative overflow-hidden hover:border-primary/50 transition-all duration-300 hover:shadow-lg hover:-translate-y-1"
-              >
-                {/* Decorative gradient overlay */}
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                
-                <CardHeader className="pb-4 space-y-2 relative z-10">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0 space-y-1.5">
-                      <CardTitle className="text-base font-semibold leading-tight line-clamp-2 group-hover:text-primary transition-colors duration-300">
-                        {note.title}
-                      </CardTitle>
-                      {note.description && (
-                        <CardDescription className="text-xs leading-relaxed line-clamp-2">
-                          {note.description}
-                        </CardDescription>
-                      )}
-                    </div>
-                    <div className="p-2.5 bg-gradient-to-br from-primary/20 to-primary/10 rounded-lg shrink-0 group-hover:scale-110 transition-transform duration-300">
-                      <FileText className="h-5 w-5 text-primary" />
-                    </div>
-                  </div>
-                </CardHeader>
-                
-                <CardContent className="relative z-10 space-y-3.5">
-                  {/* Course Info Section */}
-                  {note.course_code && note.course_title && (
-                    <div className="px-3 py-2.5 bg-muted/30 rounded-lg">
-                      <div className="flex items-center gap-2 text-xs">
-                        <BookOpen className="h-3.5 w-3.5 text-primary shrink-0" />
-                        <span className="font-semibold text-foreground">{note.course_code}</span>
-                        <span className="text-muted-foreground">•</span>
-                        <span className="text-muted-foreground line-clamp-1 flex-1">{note.course_title}</span>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {/* Badges Section */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge className={`${getExamTypeBadgeColor(note.exam_type)} text-xs px-2.5 py-1`}>
-                      {note.exam_type.charAt(0).toUpperCase() + note.exam_type.slice(1)}
-                    </Badge>
-                    {note.semester_title && (
-                      <Badge variant="outline" className="gap-1 text-xs px-2.5 py-1">
-                        <Calendar className="h-3 w-3" />
-                        {note.semester_title}
-                      </Badge>
-                    )}
-                    {note.section && (
-                      <Badge variant="secondary" className="text-xs px-2.5 py-1">
-                        {note.section}
-                      </Badge>
-                    )}
-                  </div>
-                  
-                  {/* Stats Section - Downloads & Date side by side */}
-                  <div className="flex items-center justify-between text-xs text-muted-foreground pt-3 border-t">
-                    <div className="flex items-center gap-1.5">
-                      <Download className="h-3.5 w-3.5" />
-                      <span>{note.download_count || 0}</span>
-                    </div>
-                    <span>Updated {formatDate(note.updated_at)}</span>
-                  </div>
-                  
-                  {/* Action Buttons */}
-                  <div className="pt-3.5 flex gap-2.5">
-                    <Button
-                      size="default"
-                      className="flex-1 group/btn relative overflow-hidden text-sm font-medium h-9"
-                      onClick={() => handleViewNote(note.content_url)}
-                    >
-                      <span className="absolute inset-0 bg-gradient-to-r from-primary/0 via-white/20 to-primary/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700" />
-                      <ExternalLink className="h-4 w-4 mr-1.5" />
-                      <span>View</span>
-                    </Button>
-                    <Button
-                      size="default"
-                      variant="outline"
-                      className="flex-1 group/download text-sm font-medium h-9"
-                      onClick={() => handleDownload(note.id, note.content_url)}
-                    >
-                      <Download className="h-4 w-4 mr-1.5 group-hover/download:translate-y-0.5 transition-transform duration-300" />
-                      <span>Download</span>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!loading && !error && filteredNotes.length === 0 && (
-          <Card className="text-center py-12 border-dashed">
-            <CardContent>
-              <div className="flex flex-col items-center gap-5">
-                <div className="p-5 bg-muted rounded-2xl">
-                  <FileText className="h-10 w-10 text-muted-foreground" />
-                </div>
-                <div className="space-y-3 max-w-md">
-                  <h3 className="text-lg font-semibold text-foreground">No exam notes found</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {notes.length === 0
-                      ? "No exam notes are available yet. Check back later!"
-                      : "Try adjusting your filters or search query."}
-                  </p>
-                  {notes.length > 0 && (
-                    <div className="pt-2">
-                      <Button 
-                        variant="outline"
+                    {hasActiveFilters && (
+                      <Button
+                        variant="ghost"
                         size="sm"
                         onClick={clearFilters}
+                        className="h-6 text-xs text-muted-foreground hover:text-foreground px-2"
                       >
-                        Clear Filters
+                        Clear
                       </Button>
-                    </div>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3 px-4 pb-4">
+                  {/* Search */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9 h-9 text-sm"
+                    />
+                  </div>
+
+                  {/* Exam Type */}
+                  <Select value={examTypeFilter} onValueChange={setExamTypeFilter}>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="Exam Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      {examTypes.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {getExamTypeConfig(type).icon} {getExamTypeConfig(type).label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {/* Semester */}
+                  <Select value={semesterFilter} onValueChange={setSemesterFilter}>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="Semester" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Semesters</SelectItem>
+                      {semesters.map((semester) => (
+                        <SelectItem key={semester} value={semester}>
+                          {semester}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {/* Course */}
+                  <Select value={courseFilter} onValueChange={setCourseFilter}>
+                    <SelectTrigger className="h-9 text-sm">
+                      <SelectValue placeholder="Course" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Courses</SelectItem>
+                      {courses.map((course) => (
+                        <SelectItem key={course} value={course}>
+                          {course}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </CardContent>
+              </Card>
+            </div>
+          </aside>
+
+          {/* Right Content Area */}
+          <div className="flex-1 min-w-0">
+            {/* Results Summary */}
+            {!loading && !error && (
+              <div className="mb-6 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">
+                    Showing <span className="font-semibold text-foreground">{filteredNotes.length}</span> of{" "}
+                    <span className="font-semibold text-foreground">{notes.length}</span> notes
+                  </span>
+                  {filteredNotes.length !== notes.length && (
+                    <Badge variant="outline" className="text-xs rounded-full">
+                      Filtered
+                    </Badge>
                   )}
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Help Section */}
-        {!loading && !error && notes.length > 0 && (
-          <div className="mt-10">
-            <Card className="bg-muted/30">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-primary" />
-                  <span>Quick Stats</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex gap-3 flex-wrap text-sm text-muted-foreground">
-                  <span>{notes.length} Total Notes</span>
-                  <span>•</span>
-                  <span>{semesters.length} Semesters</span>
-                  <span>•</span>
-                  <span>{Array.from(new Set(notes.map((n) => n.course_code).filter(Boolean))).length} Courses</span>
+                <div className="flex items-center gap-2">
+                  {/* View Toggle */}
+                  <div className="flex items-center bg-muted/50 rounded-lg p-1">
+                    <Button
+                      variant={viewMode === "grid" ? "secondary" : "ghost"}
+                      size="sm"
+                      onClick={() => setViewMode("grid")}
+                      className="h-8 px-3 rounded-md"
+                    >
+                      <LayoutGrid className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant={viewMode === "list" ? "secondary" : "ghost"}
+                      size="sm"
+                      onClick={() => setViewMode("list")}
+                      className="h-8 px-3 rounded-md"
+                    >
+                      <List className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            )}
+
+            {/* Loading State */}
+            {loading && (
+              <div className={cn(
+                "grid gap-4",
+                viewMode === "grid" 
+                  ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3" 
+                  : "grid-cols-1"
+              )}>
+                {[...Array(6)].map((_, i) => (
+                  <Card key={i} className="overflow-hidden">
+                    <div className="p-6 space-y-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-5 w-3/4" />
+                          <Skeleton className="h-4 w-full" />
+                        </div>
+                        <Skeleton className="h-12 w-12 rounded-xl shrink-0" />
+                      </div>
+                      <div className="space-y-3">
+                        <Skeleton className="h-10 w-full rounded-lg" />
+                        <div className="flex gap-2">
+                          <Skeleton className="h-7 w-20 rounded-full" />
+                          <Skeleton className="h-7 w-24 rounded-full" />
+                        </div>
+                        <div className="flex gap-3 pt-3">
+                          <Skeleton className="h-10 flex-1 rounded-lg" />
+                          <Skeleton className="h-10 flex-1 rounded-lg" />
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
+
+            {/* Error State */}
+            {error && (
+              <Card className="border-destructive/50 bg-destructive/5">
+                <CardContent className="flex items-center gap-4 p-6">
+                  <div className="p-3 bg-destructive/10 rounded-full">
+                    <AlertCircle className="h-6 w-6 text-destructive" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-foreground">Failed to load notes</h3>
+                    <p className="text-sm text-muted-foreground mt-1">{error}</p>
+                  </div>
+                  <Button onClick={fetchNotes} variant="outline" className="shrink-0">
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Try again
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Notes Grid/List */}
+            {!loading && !error && filteredNotes.length > 0 && (
+              <div className={cn(
+                "grid gap-4 sm:gap-6",
+                viewMode === "grid" 
+                  ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" 
+                  : "grid-cols-1"
+              )}>
+            {filteredNotes.map((note) => {
+              const examConfig = getExamTypeConfig(note.exam_type)
+              
+              return viewMode === "grid" ? (
+                // Grid View Card
+                <Card 
+                  key={note.id} 
+                  className="group flex flex-col relative overflow-hidden border bg-card/50 hover:bg-card hover:border-primary/20 hover:shadow-lg transition-all duration-300"
+                >
+                  {/* Left accent line */}
+                  <div className={cn(
+                    "absolute top-0 left-0 w-1 h-full transition-all duration-300 group-hover:w-1.5",
+                    note.exam_type === "midterm" && "bg-blue-500",
+                    note.exam_type === "final" && "bg-purple-500",
+                    note.exam_type === "both" && "bg-emerald-500",
+                    note.exam_type === "assignment" && "bg-amber-500",
+                    note.exam_type === "quiz" && "bg-rose-500",
+                    !["midterm", "final", "both", "assignment", "quiz"].includes(note.exam_type) && "bg-slate-500"
+                  )} />
+                  
+                  <CardContent className="flex flex-col flex-1 p-5 pl-7">
+                    {/* Header Section */}
+                    <div className="space-y-2 mb-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <Badge variant="outline" className={cn("text-[10px] px-2 py-0.5 h-5 font-medium border-0 bg-opacity-10", examConfig.color)}>
+                          {examConfig.label}
+                        </Badge>
+                        {note.semester_title && (
+                          <span className="text-[10px] font-medium text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">
+                            {note.semester_title}
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div>
+                        <h3 className="font-bold text-lg leading-tight line-clamp-2 text-foreground group-hover:text-primary transition-colors mb-1">
+                          {note.title}
+                        </h3>
+                        {note.course_code && (
+                          <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                            <span className="font-semibold text-foreground/80">{note.course_code}</span>
+                            {note.course_title && (
+                              <>
+                                <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
+                                <span className="truncate">{note.course_title}</span>
+                              </>
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Spacer to push footer down */}
+                    <div className="flex-1" />
+
+                    {/* Footer Section */}
+                    <div className="space-y-4 pt-2">
+                      {/* Stats */}
+                      <div className="flex items-center justify-between text-xs text-muted-foreground border-t border-dashed pt-3">
+                        <div className="flex items-center gap-1.5 hover:text-foreground transition-colors">
+                          <Download className="h-3.5 w-3.5" />
+                          <span>{note.download_count || 0}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 hover:text-foreground transition-colors">
+                          <Clock className="h-3.5 w-3.5" />
+                          <span>{formatDate(note.updated_at)}</span>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          size="sm"
+                          className="h-9 text-xs font-semibold shadow-sm w-full"
+                          onClick={() => handleViewNote(note.content_url)}
+                        >
+                          View
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-9 text-xs font-semibold w-full hover:bg-secondary/50"
+                          onClick={() => handleDownload(note.id, note.content_url)}
+                        >
+                          Download
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                // List View Card
+                <Card 
+                  key={note.id} 
+                  className="group overflow-hidden hover:shadow-sm transition-all duration-200"
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-4">
+                      <div className={cn("p-2 rounded-lg shrink-0", examConfig.color)}>
+                        <FileText className="h-5 w-5" />
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-sm group-hover:text-primary transition-colors truncate">
+                          {note.title}
+                        </h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {note.course_code && <span className="font-medium">{note.course_code}</span>}
+                          {note.semester_title && <span className="ml-2">{note.semester_title}</span>}
+                        </p>
+                      </div>
+
+                      <Badge className={cn("text-[10px] px-2 py-0.5 rounded-md shrink-0", examConfig.color)}>
+                        {examConfig.label}
+                      </Badge>
+
+                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground shrink-0 hidden sm:flex">
+                        <span className="flex items-center gap-1">
+                          <Download className="h-3 w-3" />
+                          {note.download_count || 0}
+                        </span>
+                      </div>
+
+                      <div className="flex gap-2 shrink-0">
+                        <Button
+                          size="sm"
+                          className="h-8 text-xs"
+                          onClick={() => handleViewNote(note.content_url)}
+                        >
+                          View
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs hidden sm:flex"
+                          onClick={() => handleDownload(note.id, note.content_url)}
+                        >
+                          <Download className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
           </div>
         )}
+
+            {/* Empty State */}
+            {!loading && !error && filteredNotes.length === 0 && (
+              <Card className="border-dashed border-2 bg-muted/20">
+                <CardContent className="flex flex-col items-center justify-center py-16 px-6">
+                  <div className="p-6 bg-muted rounded-full mb-6">
+                    <FolderOpen className="h-12 w-12 text-muted-foreground" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-foreground mb-2">No notes found</h3>
+                  <p className="text-sm text-muted-foreground text-center max-w-md mb-6">
+                    {notes.length === 0
+                      ? "No exam notes are available yet. Check back later for study materials!"
+                      : "No notes match your current filters. Try adjusting your search criteria."}
+                  </p>
+                  {hasActiveFilters && (
+                    <Button 
+                      variant="outline"
+                      onClick={clearFilters}
+                      className="gap-2"
+                    >
+                      <X className="h-4 w-4" />
+                      Clear all filters
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
       </main>
     </div>
   )
