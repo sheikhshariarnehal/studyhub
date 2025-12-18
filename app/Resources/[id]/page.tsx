@@ -35,6 +35,7 @@ import { Header } from "@/components/header"
 import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
+import { ProfileCardDialog } from "@/components/profile-card-dialog"
 
 // Type definitions
 interface Course {
@@ -69,6 +70,12 @@ interface Resource {
   created_at: string
   updated_at: string
   course: Course | null
+  creator: {
+    id: string
+    full_name: string
+    email: string
+    avatar_url: string | null
+  } | null
 }
 
 // Resource type configuration
@@ -207,6 +214,7 @@ export default function ResourceViewPage() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [viewCount, setViewCount] = useState(0)
   const [downloadCount, setDownloadCount] = useState(0)
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false)
   const hasTrackedView = React.useRef(false)
 
   // Track view or download action
@@ -701,6 +709,29 @@ export default function ResourceViewPage() {
                       </span>
                     </div>
 
+                    {resource.creator && (
+                      <div 
+                        onClick={() => setProfileDialogOpen(true)}
+                        className="flex items-center gap-3 p-2 -mx-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer group"
+                      >
+                        {resource.creator.avatar_url ? (
+                          <img 
+                            src={resource.creator.avatar_url} 
+                            alt={resource.creator.full_name}
+                            className="w-8 h-8 rounded-full object-cover border-2 border-muted group-hover:border-primary/50 transition-colors"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center border-2 border-muted group-hover:border-primary/50 transition-colors">
+                            <User className="w-4 h-4 text-primary" />
+                          </div>
+                        )}
+                        <div className="flex flex-col">
+                          <span className="text-xs text-muted-foreground">Created by</span>
+                          <span className="text-sm font-medium group-hover:text-primary transition-colors">{resource.creator.full_name}</span>
+                        </div>
+                      </div>
+                    )}
+
                     {resource.semester_name && (
                       <div className="flex items-center gap-3">
                         <Calendar className="w-4 h-4 text-muted-foreground" />
@@ -811,6 +842,20 @@ export default function ResourceViewPage() {
           )}
         </div>
       </div>
+      
+      {/* Profile Card Dialog */}
+      {resource?.creator && (
+        <ProfileCardDialog
+          userId={resource.creator.id}
+          userName={resource.creator.full_name}
+          open={profileDialogOpen}
+          onOpenChange={setProfileDialogOpen}
+          initialData={{
+            full_name: resource.creator.full_name,
+            avatar_url: resource.creator.avatar_url
+          }}
+        />
+      )}
       
       <Toaster />
     </div>

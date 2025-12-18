@@ -27,6 +27,12 @@ export async function GET(
           title,
           section
         )
+      ),
+      creator:admin_users!study_tools_created_by_fkey (
+        id,
+        full_name,
+        email,
+        avatar_url
       )
     `
 
