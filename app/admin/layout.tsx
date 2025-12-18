@@ -85,9 +85,9 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       <AdminSidebar user={user} />
-      <div className="lg:pl-64">
+      <div className="lg:pl-64 flex flex-col min-h-screen">
         <AdminHeader user={user} />
-        <main className="p-6">{children}</main>
+        <main className="flex-1 p-6 pt-4">{children}</main>
       </div>
     </div>
   )

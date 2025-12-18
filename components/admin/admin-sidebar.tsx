@@ -116,29 +116,29 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
       {/* Sidebar */}
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border transform transition-transform duration-300 ease-in-out lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border transform transition-transform duration-300 ease-in-out lg:translate-x-0 shadow-lg lg:shadow-none",
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
       >
         <div className="flex flex-col h-full">
-          {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-border">
+          {/* Header - aligned with main header height */}
+          <div className="flex items-center justify-between h-16 px-4 border-b border-border bg-card/95 backdrop-blur-sm">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Shield className="h-4 w-4 text-primary-foreground" />
+              <div className="w-9 h-9 bg-gradient-to-br from-primary to-primary/80 rounded-xl flex items-center justify-center shadow-sm">
+                <Shield className="h-5 w-5 text-primary-foreground" />
               </div>
               <div>
-                <h2 className="font-semibold text-foreground">Dashboard</h2>
-                <p className="text-xs text-muted-foreground">Admin</p>
+                <h2 className="font-bold text-foreground text-base leading-tight">DIU Admin</h2>
+                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Dashboard</p>
               </div>
             </div>
-            <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setIsMobileMenuOpen(false)}>
+            <Button variant="ghost" size="icon" className="lg:hidden h-8 w-8" onClick={() => setIsMobileMenuOpen(false)}>
               <X className="h-4 w-4" />
             </Button>
           </div>
 
           {/* Navigation */}
-          <nav className="p-4 space-y-1 overflow-y-auto flex-1">
+          <nav className="px-3 py-4 space-y-1 overflow-y-auto flex-1 scrollbar-thin">
             {navigation.map((item) => {
               const isActive = pathname === item.href || (item.children && item.children.some(child => pathname === child.href))
               const isExpanded = expandedItems.includes(item.name)
@@ -150,22 +150,27 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
                     <button
                       onClick={() => toggleExpanded(item.name)}
                       className={cn(
-                        "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors w-full",
+                        "flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 w-full group",
                         isActive
                           ? "bg-primary/10 text-primary"
                           : "text-foreground hover:bg-accent hover:text-accent-foreground",
                       )}
                     >
-                      <item.icon className="h-4 w-4" />
+                      <div className={cn(
+                        "p-1.5 rounded-md transition-colors",
+                        isActive ? "bg-primary/20" : "bg-muted group-hover:bg-accent"
+                      )}>
+                        <item.icon className="h-4 w-4" />
+                      </div>
                       <span className="flex-1 text-left">{item.name}</span>
                       {isExpanded ? (
-                        <ChevronDown className="h-4 w-4" />
+                        <ChevronDown className="h-4 w-4 transition-transform" />
                       ) : (
-                        <ChevronRight className="h-4 w-4" />
+                        <ChevronRight className="h-4 w-4 transition-transform" />
                       )}
                     </button>
                     {isExpanded && (
-                      <div className="ml-4 mt-1 space-y-1 border-l border-border pl-3">
+                      <div className="ml-5 mt-1 space-y-0.5 border-l-2 border-primary/20 pl-3">
                         {item.children.map((child) => {
                           const isChildActive = pathname === child.href
                           return (
@@ -173,14 +178,14 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
                               key={child.name}
                               href={child.href}
                               className={cn(
-                                "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors",
+                                "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200",
                                 isChildActive
-                                  ? "bg-primary text-primary-foreground"
-                                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                                  ? "bg-primary text-primary-foreground shadow-sm"
+                                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
                               )}
                               onClick={() => setIsMobileMenuOpen(false)}
                             >
-                              <child.icon className="h-4 w-4" />
+                              <child.icon className="h-3.5 w-3.5" />
                               <span className="flex-1">{child.name}</span>
                             </Link>
                           )
@@ -196,17 +201,22 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
                   key={item.name}
                   href={item.href}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors",
+                    "flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-200 group",
                     isActive
-                      ? "bg-primary text-primary-foreground"
+                      ? "bg-primary text-primary-foreground shadow-sm"
                       : "text-foreground hover:bg-accent hover:text-accent-foreground",
                   )}
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
-                  <item.icon className="h-4 w-4" />
+                  <div className={cn(
+                    "p-1.5 rounded-md transition-colors",
+                    isActive ? "bg-primary-foreground/20" : "bg-muted group-hover:bg-accent"
+                  )}>
+                    <item.icon className="h-4 w-4" />
+                  </div>
                   <span className="flex-1">{item.name}</span>
                   {item.badge && (
-                    <Badge variant="secondary" className="text-xs">
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-600 dark:text-amber-400 border-amber-500/30">
                       {item.badge}
                     </Badge>
                   )}
@@ -218,18 +228,19 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
           {/* User info */}
           <div className="p-4 border-t border-border mt-auto">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center">
-                <Users className="h-5 w-5 text-muted-foreground" />
+              <div className="w-9 h-9 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
+                <span className="text-xs font-semibold text-primary-foreground">
+                  {user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                </span>
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate">{user.full_name}</p>
-                <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-medium">
+                    {user.role.replace("_", " ").toUpperCase()}
+                  </Badge>
+                </div>
               </div>
-            </div>
-            <div className="mt-2">
-              <Badge className={cn("text-xs", getRoleBadgeColor(user.role))}>
-                {user.role.replace("_", " ").toUpperCase()}
-              </Badge>
             </div>
           </div>
         </div>
