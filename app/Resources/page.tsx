@@ -140,7 +140,7 @@ export default function ResourcesPage() {
   const [filters, setFilters] = useState<Filters>({ types: [], courses: [], examTypes: [] })
   const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 20, total: 0, totalPages: 0 })
   const [loading, setLoading] = useState(true)
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list")
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -611,6 +611,16 @@ export default function ResourcesPage() {
                     {resource.description}
                   </p>
                 )}
+                <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1.5">
+                    <Download className="w-3.5 h-3.5" />
+                    <span>{resource.download_count.toLocaleString()} downloads</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>{resource.view_count.toLocaleString()} views</span>
+                  </div>
+                </div>
               </div>
               
               <div className="flex items-center gap-3 shrink-0">
