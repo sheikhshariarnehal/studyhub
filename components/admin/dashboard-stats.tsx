@@ -5,7 +5,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { supabase } from "@/lib/supabase"
-import { BookOpen, Calendar, FileText, Play, AlertCircle } from "lucide-react"
+import { 
+  BookOpen, 
+  Calendar, 
+  FileText, 
+  Play, 
+  AlertCircle, 
+  TrendingUp,
+  Wrench,
+  GraduationCap
+} from "lucide-react"
 
 export function DashboardStats() {
   const [stats, setStats] = useState({
@@ -74,28 +83,58 @@ export function DashboardStats() {
 
   const statsData = [
     {
-      title: "Total Semesters",
+      title: "Semesters",
       value: stats.semesterCount,
       icon: Calendar,
       description: "Active semesters",
+      color: "from-blue-500 to-blue-600",
+      bgColor: "bg-blue-500/10",
+      textColor: "text-blue-600",
     },
     {
-      title: "Total Courses",
+      title: "Courses",
       value: stats.courseCount,
       icon: BookOpen,
-      description: "Courses available",
+      description: "Total courses",
+      color: "from-emerald-500 to-emerald-600",
+      bgColor: "bg-emerald-500/10",
+      textColor: "text-emerald-600",
     },
     {
       title: "Topics",
       value: stats.topicCount,
       icon: FileText,
       description: "Learning topics",
+      color: "from-purple-500 to-purple-600",
+      bgColor: "bg-purple-500/10",
+      textColor: "text-purple-600",
     },
     {
-      title: "Content Items",
-      value: stats.slideCount + stats.videoCount + stats.studyToolCount,
+      title: "Slides",
+      value: stats.slideCount,
+      icon: GraduationCap,
+      description: "Presentation slides",
+      color: "from-orange-500 to-orange-600",
+      bgColor: "bg-orange-500/10",
+      textColor: "text-orange-600",
+    },
+    {
+      title: "Videos",
+      value: stats.videoCount,
       icon: Play,
-      description: "Slides, videos & tools",
+      description: "Video lessons",
+      color: "from-red-500 to-red-600",
+      bgColor: "bg-red-500/10",
+      textColor: "text-red-600",
+    },
+    {
+      title: "Study Tools",
+      value: stats.studyToolCount,
+      icon: Wrench,
+      description: "Learning tools",
+      color: "from-cyan-500 to-cyan-600",
+      bgColor: "bg-cyan-500/10",
+      textColor: "text-cyan-600",
     },
   ]
 
@@ -112,16 +151,16 @@ export function DashboardStats() {
 
   if (isLoading) {
     return (
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <Skeleton className="h-4 w-20" />
-              <Skeleton className="h-4 w-4" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-8 w-16 mb-2" />
-              <Skeleton className="h-3 w-24" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <Card key={i} className="relative overflow-hidden">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between mb-3">
+                <Skeleton className="h-10 w-10 rounded-xl" />
+                <Skeleton className="h-4 w-16" />
+              </div>
+              <Skeleton className="h-8 w-20 mb-1" />
+              <Skeleton className="h-4 w-24" />
             </CardContent>
           </Card>
         ))}
@@ -129,17 +168,31 @@ export function DashboardStats() {
     )
   }
 
+  const totalContent = stats.slideCount + stats.videoCount + stats.studyToolCount
+
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       {statsData.map((stat) => (
-        <Card key={stat.title}>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-            <stat.icon className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stat.value}</div>
-            <p className="text-xs text-muted-foreground">{stat.description}</p>
+        <Card 
+          key={stat.title} 
+          className="relative overflow-hidden group hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 border-muted-foreground/20"
+        >
+          <div className={`absolute inset-0 bg-gradient-to-br ${stat.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className={`p-2.5 rounded-xl ${stat.bgColor}`}>
+                <stat.icon className={`h-5 w-5 ${stat.textColor}`} />
+              </div>
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <TrendingUp className="h-3 w-3 text-emerald-500" />
+                <span className="text-emerald-500 font-medium">Active</span>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <p className="text-3xl font-bold tracking-tight">{stat.value}</p>
+              <p className="text-sm font-medium text-foreground">{stat.title}</p>
+              <p className="text-xs text-muted-foreground">{stat.description}</p>
+            </div>
           </CardContent>
         </Card>
       ))}
