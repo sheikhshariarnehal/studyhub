@@ -30,6 +30,7 @@ import {
   Library,
   ChevronDown,
   ChevronRight,
+  UserCircle,
 } from "lucide-react"
 
 import { type AdminUser } from "@/contexts/auth-context"
@@ -48,6 +49,7 @@ interface NavItem {
 
 const navigation: NavItem[] = [
   { name: "Dashboard", href: "/admin", icon: Home },
+  { name: "Profile", href: "/admin/profile", icon: UserCircle },
   { name: "Bulk Creator", href: "/admin/bulk-creator", icon: Layers, badge: "Pro" },
   { name: "Create Semester", href: "/admin/semester-management", icon: GraduationCap },
   { name: "Semesters", href: "/admin/semesters", icon: Calendar },

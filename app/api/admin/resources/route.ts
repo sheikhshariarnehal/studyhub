@@ -1,11 +1,15 @@
 import { NextResponse, NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase"
+import { getAuthUser, isContributor } from "@/lib/auth-utils"
 
 export const dynamic = "force-dynamic"
 
 // GET - Fetch all resources with filters
 export async function GET(request: NextRequest) {
   try {
+    // Get authenticated user
+    const user = await getAuthUser(request)
+    
     const { searchParams } = new URL(request.url)
     const type = searchParams.get("type")
     const courseId = searchParams.get("courseId")
@@ -32,8 +36,18 @@ export async function GET(request: NextRequest) {
             title,
             section
           )
+        ),
+        creator:admin_users!study_tools_created_by_fkey (
+          id,
+          full_name,
+          email
         )
       `, { count: "exact" })
+
+    // Apply contributor filter - they can only see their own resources
+    if (user && isContributor(user)) {
+      query = query.eq("created_by", user.id)
+    }
 
     // Apply filters
     if (type && type !== "all") {
@@ -109,6 +123,24 @@ export async function GET(request: NextRequest) {
 // POST - Create a new resource
 export async function POST(request: NextRequest) {
   try {
+    // Get authenticated user
+    const user = await getAuthUser(request)
+    
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized - Please login" },
+        { status: 401 }
+      )
+    }
+
+    // Check if user is approved (for contributors)
+    if (isContributor(user) && !user.is_approved) {
+      return NextResponse.json(
+        { error: "Your account is pending approval" },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const { 
       title, 
@@ -162,7 +194,8 @@ export async function POST(request: NextRequest) {
         academic_year,
         is_downloadable,
         download_count: 0,
-        view_count: 0
+        view_count: 0,
+        created_by: user.id  // Track who created this resource
       })
       .select(`
         *,

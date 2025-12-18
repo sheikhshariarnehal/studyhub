@@ -1,12 +1,14 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
+import { getAuthUser, isContributor } from "@/lib/auth-utils"
 
 /**
  * GET /api/courses
  * Fetch all courses with optional filtering
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
+    const user = await getAuthUser(request)
     const { searchParams } = new URL(request.url)
     const semesterId = searchParams.get("semester_id")
     const search = searchParams.get("search")
@@ -18,7 +20,14 @@ export async function GET(request: Request) {
         title,
         course_code,
         teacher_name,
+        teacher_email,
+        description,
+        credits,
         semester_id,
+        is_active,
+        is_highlighted,
+        created_at,
+        created_by,
         semester:semesters (
           id,
           title,
@@ -26,6 +35,11 @@ export async function GET(request: Request) {
         )
       `)
       .order("course_code", { ascending: true })
+
+    // Contributors can only see their own courses
+    if (user && isContributor(user)) {
+      query = query.eq("created_by", user.id)
+    }
 
     // Filter by semester if provided
     if (semesterId) {

@@ -10,6 +10,7 @@ import {
   type Course,
   type CourseWithRelations,
 } from "@/lib/api-utils"
+import { getAuthUser, isContributor } from "@/lib/auth-utils"
 
 /**
  * GET /api/semesters/[id]/courses
@@ -150,6 +151,17 @@ export async function POST(
 ) {
   return withErrorHandler(async () => {
     const { id: semesterId } = await params
+    const user = await getAuthUser(request)
+    
+    // Require authentication
+    if (!user) {
+      return errorResponse("Unauthorized - Please login", 401)
+    }
+
+    // Check if contributor is approved
+    if (isContributor(user) && !user.is_approved) {
+      return errorResponse("Your account is pending approval", 403)
+    }
     
     // Validate UUID format
     const validationError = validateUUID(semesterId, "semester")
@@ -161,12 +173,17 @@ export async function POST(
     // Verify semester exists
     const { data: semester, error: semesterError } = await supabase
       .from("semesters")
-      .select("id, default_credits")
+      .select("id, default_credits, created_by")
       .eq("id", semesterId)
       .single()
 
     if (semesterError || !semester) {
       return notFoundResponse("Semester")
+    }
+
+    // Contributors can only add courses to their own semesters
+    if (isContributor(user) && semester.created_by !== user.id) {
+      return errorResponse("Access denied - You can only add courses to your own semesters", 403)
     }
 
     // Validate required fields
@@ -206,6 +223,7 @@ export async function POST(
         semester_id: semesterId,
         is_active: body.is_active ?? true,
         is_highlighted: body.is_highlighted ?? false,
+        created_by: user.id,  // Track who created this course
       })
       .select()
       .single()

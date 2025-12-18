@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createDB } from "@/lib/supabase"
+import { getAuthUser, isContributor } from "@/lib/auth-utils"
 
 interface SemesterData {
   title: string
@@ -47,6 +48,24 @@ interface AllInOneData {
 
 export async function POST(request: NextRequest) {
   try {
+    // Get authenticated user
+    const user = await getAuthUser(request)
+    
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized - Please login" },
+        { status: 401 }
+      )
+    }
+
+    // Check if user is approved (for contributors)
+    if (isContributor(user) && !user.is_approved) {
+      return NextResponse.json(
+        { error: "Your account is pending approval" },
+        { status: 403 }
+      )
+    }
+
     const data: AllInOneData = await request.json()
     const db = createDB()
 
@@ -82,7 +101,8 @@ export async function POST(request: NextRequest) {
       description: data.semester.description,
       section: data.semester.section,
       has_midterm: data.semester.has_midterm,
-      has_final: data.semester.has_final
+      has_final: data.semester.has_final,
+      created_by: user.id
     }
 
     const { data: semesterData, error: semesterError } = await db
@@ -112,7 +132,8 @@ export async function POST(request: NextRequest) {
           credits: course.credits || 3,
           description: course.description || null,
           is_highlighted: course.is_highlighted || false,
-          semester_id: semesterData.id
+          semester_id: semesterData.id,
+          created_by: user.id
         }
 
         const { data: courseData, error: courseError } = await db
@@ -137,7 +158,8 @@ export async function POST(request: NextRequest) {
               title: topic.title,
               description: topic.description || "",
               course_id: courseData.id,
-              order_index: topic.order_index || topicIndex + 1
+              order_index: topic.order_index || topicIndex + 1,
+              created_by: user.id
             }])
             .select()
             .single()
@@ -152,7 +174,8 @@ export async function POST(request: NextRequest) {
                 title: slide.title,
                 google_drive_url: slide.url,
                 topic_id: topicData.id,
-                order_index: slideIndex + 1
+                order_index: slideIndex + 1,
+                created_by: user.id
               }])
             )
 
@@ -164,7 +187,8 @@ export async function POST(request: NextRequest) {
                 title: video.title,
                 youtube_url: video.url,
                 topic_id: topicData.id,
-                order_index: videoIndex + 1
+                order_index: videoIndex + 1,
+                created_by: user.id
               }])
             )
 
@@ -189,7 +213,8 @@ export async function POST(request: NextRequest) {
                 type: tool.type,
                 content_url: tool.content_url || null,
                 course_id: courseData.id,
-                exam_type: tool.exam_type || "both"
+                exam_type: tool.exam_type || "both",
+                created_by: user.id
               }
 
               // Only add description if it has a value

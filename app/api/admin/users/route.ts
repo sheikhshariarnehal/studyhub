@@ -1,15 +1,100 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase"
 import bcrypt from "bcryptjs"
+import jwt from "jsonwebtoken"
 
-export async function GET() {
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production"
+
+// Disable caching for this route
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+// Helper to verify admin access
+async function verifyAdminAccess(request: NextRequest) {
+  const token = request.cookies.get("admin_token")?.value
+  
+  if (!token) {
+    return { authorized: false, error: "Unauthorized", userId: null, role: null }
+  }
+
   try {
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; role: string }
+    const adminRoles = ['super_admin', 'admin', 'moderator']
+    
+    if (!adminRoles.includes(decoded.role)) {
+      return { authorized: false, error: "Insufficient permissions", userId: decoded.userId, role: decoded.role }
+    }
+    
+    return { authorized: true, error: null, userId: decoded.userId, role: decoded.role }
+  } catch {
+    return { authorized: false, error: "Invalid token", userId: null, role: null }
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const auth = await verifyAdminAccess(request)
+    if (!auth.authorized) {
+      return NextResponse.json(
+        { success: false, error: auth.error },
+        { status: 401 }
+      )
+    }
+
+    const { searchParams } = new URL(request.url)
+    const role = searchParams.get("role")
+    const isApproved = searchParams.get("is_approved")
+    const search = searchParams.get("search")
+    const page = parseInt(searchParams.get("page") || "1")
+    const limit = parseInt(searchParams.get("limit") || "20")
+    const offset = (page - 1) * limit
+
     const supabase = createClient()
 
-    const { data: users, error } = await supabase
+    // Build query
+    let query = supabase
       .from("admin_users")
-      .select("id, email, full_name, role, department, phone, is_active, last_login, login_count, created_at, updated_at")
+      .select(`
+        id,
+        full_name,
+        email,
+        role,
+        department,
+        phone,
+        bio,
+        avatar_url,
+        student_id,
+        batch_id,
+        is_active,
+        is_approved,
+        last_login,
+        login_count,
+        created_at,
+        updated_at,
+        batches (
+          id,
+          batch_number,
+          batch_name
+        )
+      `, { count: 'exact' })
+
+    // Apply filters
+    if (role && role !== "all") {
+      query = query.eq("role", role)
+    }
+    
+    if (isApproved !== null && isApproved !== "all") {
+      query = query.eq("is_approved", isApproved === "true")
+    }
+
+    if (search) {
+      query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,student_id.ilike.%${search}%`)
+    }
+
+    // Apply pagination and ordering
+    const { data: users, error, count } = await query
       .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1)
 
     if (error) {
       console.error("Error fetching admin users:", error)
@@ -21,11 +106,180 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      users: users || []
+      users: users || [],
+      pagination: {
+        page,
+        limit,
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / limit)
+      }
     })
 
   } catch (error) {
     console.error("Admin users API error:", error)
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 }
+    )
+  }
+}
+
+// PUT - Update user (approve, change role, etc.)
+export async function PUT(request: NextRequest) {
+  try {
+    const auth = await verifyAdminAccess(request)
+    if (!auth.authorized) {
+      return NextResponse.json(
+        { success: false, error: auth.error },
+        { status: 401 }
+      )
+    }
+
+    const { userId, updates } = await request.json()
+
+    if (!userId) {
+      return NextResponse.json(
+        { success: false, error: "User ID is required" },
+        { status: 400 }
+      )
+    }
+
+    // Only super_admin can change to admin roles
+    const adminRoles = ['super_admin', 'admin', 'moderator']
+    if (updates.role && adminRoles.includes(updates.role) && auth.role !== 'super_admin') {
+      return NextResponse.json(
+        { success: false, error: "Only super admin can assign admin roles" },
+        { status: 403 }
+      )
+    }
+
+    const supabase = createClient()
+
+    // Validate allowed update fields
+    const allowedFields = ['is_approved', 'is_active', 'role', 'department', 'phone']
+    const sanitizedUpdates: Record<string, any> = {}
+    
+    for (const field of allowedFields) {
+      if (updates[field] !== undefined) {
+        sanitizedUpdates[field] = updates[field]
+      }
+    }
+
+    if (Object.keys(sanitizedUpdates).length === 0) {
+      return NextResponse.json(
+        { success: false, error: "No valid fields to update" },
+        { status: 400 }
+      )
+    }
+
+    sanitizedUpdates.updated_at = new Date().toISOString()
+
+    const { data: updatedUser, error } = await supabase
+      .from("admin_users")
+      .update(sanitizedUpdates)
+      .eq("id", userId)
+      .select(`
+        id,
+        full_name,
+        email,
+        role,
+        department,
+        phone,
+        is_active,
+        is_approved,
+        batch_id,
+        student_id,
+        created_at,
+        updated_at,
+        batches (
+          id,
+          batch_number,
+          batch_name
+        )
+      `)
+      .single()
+
+    if (error) {
+      console.error("Error updating user:", error)
+      return NextResponse.json(
+        { success: false, error: "Failed to update user" },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      user: updatedUser
+    })
+
+  } catch (error) {
+    console.error("Update user error:", error)
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 }
+    )
+  }
+}
+
+// DELETE - Delete user
+export async function DELETE(request: NextRequest) {
+  try {
+    const auth = await verifyAdminAccess(request)
+    if (!auth.authorized) {
+      return NextResponse.json(
+        { success: false, error: auth.error },
+        { status: 401 }
+      )
+    }
+
+    // Only super_admin can delete users
+    if (auth.role !== 'super_admin') {
+      return NextResponse.json(
+        { success: false, error: "Only super admin can delete users" },
+        { status: 403 }
+      )
+    }
+
+    const { searchParams } = new URL(request.url)
+    const userId = searchParams.get("userId")
+
+    if (!userId) {
+      return NextResponse.json(
+        { success: false, error: "User ID is required" },
+        { status: 400 }
+      )
+    }
+
+    // Prevent self-deletion
+    if (userId === auth.userId) {
+      return NextResponse.json(
+        { success: false, error: "Cannot delete your own account" },
+        { status: 400 }
+      )
+    }
+
+    const supabase = createClient()
+
+    const { error } = await supabase
+      .from("admin_users")
+      .delete()
+      .eq("id", userId)
+
+    if (error) {
+      console.error("Error deleting user:", error)
+      return NextResponse.json(
+        { success: false, error: "Failed to delete user" },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "User deleted successfully"
+    })
+
+  } catch (error) {
+    console.error("Delete user error:", error)
     return NextResponse.json(
       { success: false, error: "Internal server error" },
       { status: 500 }

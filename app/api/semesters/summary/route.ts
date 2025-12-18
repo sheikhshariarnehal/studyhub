@@ -1,14 +1,25 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
+import { getAuthUser, isContributor } from "@/lib/auth-utils"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // Get all semesters
-    const { data: semesters, error: semestersError } = await supabase
+    // Get authenticated user
+    const user = await getAuthUser(request)
+
+    // Build query for semesters
+    let query = supabase
       .from("semesters")
       .select("*")
       .order("is_active", { ascending: false })
       .order("created_at", { ascending: false })
+
+    // Contributors can only see their own semesters
+    if (user && isContributor(user)) {
+      query = query.eq("created_by", user.id)
+    }
+
+    const { data: semesters, error: semestersError } = await query
 
     if (semestersError) {
       console.error("Error fetching semesters:", semestersError)

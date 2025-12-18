@@ -8,6 +8,7 @@ import {
   withErrorHandler,
   type Semester,
 } from "@/lib/api-utils"
+import { getAuthUser, isContributor } from "@/lib/auth-utils"
 
 /**
  * GET /api/semesters/[id]
@@ -24,6 +25,7 @@ export async function GET(
 ) {
   return withErrorHandler(async () => {
     const { id } = await params
+    const user = await getAuthUser(request)
     
     // Validate UUID format
     const validationError = validateUUID(id, "semester")
@@ -34,7 +36,7 @@ export async function GET(
     const include = searchParams.get('include')
 
     // Build select query based on include parameter
-    let selectQuery = '*'
+    let selectQuery = '*, created_by'
     if (include === 'courses') {
       selectQuery = `
         *,
@@ -73,6 +75,11 @@ export async function GET(
       return errorResponse(error.message, 500)
     }
 
+    // Contributors can only access their own semesters
+    if (user && isContributor(user) && data.created_by !== user.id) {
+      return errorResponse("Access denied - You can only view your own semesters", 403)
+    }
+
     return successResponse(data as Semester)
   })
 }
@@ -87,12 +94,32 @@ export async function PUT(
 ) {
   return withErrorHandler(async () => {
     const { id } = await params
+    const user = await getAuthUser(request)
+    
+    // Require authentication
+    if (!user) {
+      return errorResponse("Unauthorized - Please login", 401)
+    }
     
     // Validate UUID format
     const validationError = validateUUID(id, "semester")
     if (validationError) return validationError
 
     const supabase = getSupabaseClient()
+
+    // Check ownership for contributors
+    if (isContributor(user)) {
+      const { data: semester } = await supabase
+        .from("semesters")
+        .select("created_by")
+        .eq("id", id)
+        .single()
+      
+      if (semester?.created_by !== user.id) {
+        return errorResponse("Access denied - You can only edit your own semesters", 403)
+      }
+    }
+
     const body = await request.json()
 
     // Build update object with only allowed fields
@@ -167,6 +194,12 @@ export async function DELETE(
 ) {
   return withErrorHandler(async () => {
     const { id } = await params
+    const user = await getAuthUser(request)
+    
+    // Require authentication
+    if (!user) {
+      return errorResponse("Unauthorized - Please login", 401)
+    }
     
     // Validate UUID format
     const validationError = validateUUID(id, "semester")
@@ -174,15 +207,20 @@ export async function DELETE(
 
     const supabase = getSupabaseClient()
 
-    // Check if semester exists
+    // Check if semester exists and get ownership info
     const { data: existing, error: checkError } = await supabase
       .from("semesters")
-      .select("id, title")
+      .select("id, title, created_by")
       .eq("id", id)
       .single()
 
     if (checkError || !existing) {
       return notFoundResponse("Semester")
+    }
+
+    // Contributors can only delete their own semesters
+    if (isContributor(user) && existing.created_by !== user.id) {
+      return errorResponse("Access denied - You can only delete your own semesters", 403)
     }
 
     // Check for related courses

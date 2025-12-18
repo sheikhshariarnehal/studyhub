@@ -1,7 +1,19 @@
 import { NextResponse, NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase"
+import { getAuthUser, isContributor } from "@/lib/auth-utils"
 
 export const dynamic = "force-dynamic"
+
+// Helper to check if contributor owns the resource
+async function checkResourceOwnership(supabase: any, resourceId: string, userId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from("study_tools")
+    .select("created_by")
+    .eq("id", resourceId)
+    .single()
+  
+  return data?.created_by === userId
+}
 
 // GET - Fetch a single resource
 export async function GET(
@@ -10,6 +22,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params
+    const user = await getAuthUser(request)
     const supabase = createClient()
 
     const { data: resource, error } = await supabase
@@ -39,6 +52,14 @@ export async function GET(
       )
     }
 
+    // Contributors can only view their own resources
+    if (user && isContributor(user) && resource.created_by !== user.id) {
+      return NextResponse.json(
+        { error: "Access denied - You can only view your own resources" },
+        { status: 403 }
+      )
+    }
+
     return NextResponse.json({
       success: true,
       resource
@@ -59,6 +80,28 @@ export async function PUT(
 ) {
   try {
     const { id } = await params
+    const user = await getAuthUser(request)
+    
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized - Please login" },
+        { status: 401 }
+      )
+    }
+
+    const supabase = createClient()
+
+    // Contributors can only update their own resources
+    if (isContributor(user)) {
+      const isOwner = await checkResourceOwnership(supabase, id, user.id)
+      if (!isOwner) {
+        return NextResponse.json(
+          { error: "Access denied - You can only edit your own resources" },
+          { status: 403 }
+        )
+      }
+    }
+
     const body = await request.json()
     const { 
       title, 
@@ -75,8 +118,6 @@ export async function PUT(
       academic_year,
       is_downloadable
     } = body
-
-    const supabase = createClient()
 
     // Build update object with only provided fields
     const updateData: Record<string, any> = { updated_at: new Date().toISOString() }
@@ -143,7 +184,27 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params
+    const user = await getAuthUser(request)
+    
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized - Please login" },
+        { status: 401 }
+      )
+    }
+
     const supabase = createClient()
+
+    // Contributors can only delete their own resources
+    if (isContributor(user)) {
+      const isOwner = await checkResourceOwnership(supabase, id, user.id)
+      if (!isOwner) {
+        return NextResponse.json(
+          { error: "Access denied - You can only delete your own resources" },
+          { status: 403 }
+        )
+      }
+    }
 
     const { error } = await supabase
       .from("study_tools")

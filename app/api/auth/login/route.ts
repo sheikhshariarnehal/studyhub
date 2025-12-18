@@ -99,6 +99,10 @@ export async function POST(request: NextRequest) {
       console.error("Error creating session:", sessionError)
     }
 
+    // Determine redirect URL based on role
+    const adminRoles = ['super_admin', 'admin', 'moderator', 'content_creator', 'section_admin']
+    const redirectUrl = adminRoles.includes(adminUser.role) ? "/admin" : "/dashboard"
+
     // Return user data (without password hash)
     const { password_hash, ...userWithoutPassword } = adminUser
 
@@ -106,7 +110,7 @@ export async function POST(request: NextRequest) {
       success: true,
       user: userWithoutPassword,
       token,
-      redirectUrl: "/admin" // Explicit redirect URL
+      redirectUrl // Dynamic redirect URL based on role
     })
 
     // Set HTTP-only cookie with production-safe settings

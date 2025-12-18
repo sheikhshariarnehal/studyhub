@@ -8,6 +8,7 @@ import {
   type Semester,
   type SemesterWithCourses,
 } from "@/lib/api-utils"
+import { getAuthUser, isContributor } from "@/lib/auth-utils"
 
 /**
  * GET /api/semesters
@@ -25,6 +26,7 @@ import {
 export async function GET(request: NextRequest) {
   return withErrorHandler(async () => {
     const supabase = getSupabaseClient()
+    const user = await getAuthUser(request)
     const { searchParams } = new URL(request.url)
     const params = parseQueryParams(searchParams)
     const includeCourses = searchParams.get('include') === 'courses'
@@ -50,6 +52,11 @@ export async function GET(request: NextRequest) {
           : '*',
         { count: 'exact' }
       )
+
+    // Contributors can only see their own semesters
+    if (user && isContributor(user)) {
+      query = query.eq('created_by', user.id)
+    }
 
     // Apply filters
     if (params.isActive !== undefined) {
@@ -102,7 +109,18 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   return withErrorHandler(async () => {
     const supabase = getSupabaseClient()
+    const user = await getAuthUser(request)
     const body = await request.json()
+
+    // Require authentication
+    if (!user) {
+      return errorResponse("Unauthorized - Please login", 401)
+    }
+
+    // Check if contributor is approved
+    if (isContributor(user) && !user.is_approved) {
+      return errorResponse("Your account is pending approval", 403)
+    }
 
     // Validate required fields
     if (!body.title?.trim()) {
@@ -141,6 +159,7 @@ export async function POST(request: NextRequest) {
         end_date: body.end_date || null,
         default_credits: body.default_credits || 3,
         is_active: body.is_active ?? true,
+        created_by: user.id,  // Track who created this semester
       })
       .select()
       .single()
