@@ -227,11 +227,9 @@ export default function ResourcesPage() {
   // Count active filters
   const activeFilterCount = selectedTypes.length + (selectedCourse ? 1 : 0) + (selectedExamType ? 1 : 0)
 
-  // Open resource
+  // Open resource - Navigate to detail page
   const openResource = (resource: Resource) => {
-    if (resource.content_url) {
-      window.open(resource.content_url, "_blank")
-    }
+    router.push(`/Resources/${resource.id}`)
   }
 
   // Format date
@@ -436,7 +434,10 @@ export default function ResourcesPage() {
     const Icon = config.icon
 
     return (
-      <Card className="group hover:shadow-lg transition-all duration-300 overflow-hidden border-border/50 hover:border-primary/30">
+      <Card 
+        className="group hover:shadow-lg transition-all duration-300 overflow-hidden border-border/50 hover:border-primary/30 cursor-pointer"
+        onClick={() => openResource(resource)}
+      >
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-2">
             <div className={cn("p-2 rounded-lg", config.bgColor)}>
@@ -496,20 +497,14 @@ export default function ResourcesPage() {
                 {resource.download_count}
               </span>
             )}
-            {resource.content_url ? (
-              <Button 
-                size="sm" 
-                onClick={() => openResource(resource)}
-                className="gap-1.5"
-              >
-                <Eye className="w-4 h-4" />
-                View
-              </Button>
-            ) : (
-              <Button size="sm" disabled variant="outline">
-                No Link
-              </Button>
-            )}
+            <Button 
+              size="sm" 
+              onClick={() => openResource(resource)}
+              className="gap-1.5"
+            >
+              <Eye className="w-4 h-4" />
+              View
+            </Button>
           </div>
         </CardFooter>
       </Card>
@@ -527,7 +522,10 @@ export default function ResourcesPage() {
     const Icon = config.icon
 
     return (
-      <Card className="group hover:shadow-md transition-all duration-200 overflow-hidden">
+      <Card 
+        className="group hover:shadow-md transition-all duration-200 overflow-hidden cursor-pointer"
+        onClick={() => openResource(resource)}
+      >
         <div className="flex items-center p-4 gap-4">
           <div className={cn("p-3 rounded-lg shrink-0", config.bgColor)}>
             <Icon className={cn("w-6 h-6", config.color)} />
@@ -569,20 +567,17 @@ export default function ResourcesPage() {
                   {formatDate(resource.created_at)}
                 </div>
                 
-                {resource.content_url ? (
-                  <Button 
-                    size="sm" 
-                    onClick={() => openResource(resource)}
-                    className="gap-1.5"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    Open
-                  </Button>
-                ) : (
-                  <Button size="sm" disabled variant="outline">
-                    No Link
-                  </Button>
-                )}
+                <Button 
+                  size="sm" 
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openResource(resource)
+                  }}
+                  className="gap-1.5"
+                >
+                  <Eye className="w-4 h-4" />
+                  View
+                </Button>
               </div>
             </div>
           </div>

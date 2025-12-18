@@ -89,7 +89,7 @@ export function Header({ className }: HeaderProps) {
                 <img
                   src="/images/favicon.png"
                   alt="StudyHub DIU"
-                  className="w-full h-full object-cover brightness-0 invert dark:brightness-100 dark:invert-0"
+                  className="w-full h-full object-cover dark:invert"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement
                     target.style.display = 'none'
