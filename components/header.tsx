@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useRouter, usePathname } from "next/navigation"
-import { Bell, Sun, User, Moon, Menu, X, LogOut, Settings, ChevronDown, BookOpen, GraduationCap } from "lucide-react"
+import { Bell, Sun, User, Moon, Menu, X, LogOut, Settings, ChevronDown, BookOpen, GraduationCap, FolderOpen } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
@@ -47,6 +47,7 @@ export function Header({ className }: HeaderProps) {
 
   const navigationItems = [
     { name: "Study", href: "/", icon: BookOpen, primary: true },
+    { name: "Resources", href: "/Resources", icon: FolderOpen, primary: false },
     { name: "Notes", href: "/notes", icon: GraduationCap, primary: false },
     { name: "Contributor", href: "/contributor", primary: false },
     { name: "Result", href: "/result", primary: false },
