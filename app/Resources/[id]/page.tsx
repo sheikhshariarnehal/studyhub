@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { 
   ArrowLeft, 
@@ -64,6 +64,7 @@ interface Resource {
   academic_year: string | null
   is_downloadable: boolean
   download_count: number
+  view_count: number
   created_at: string
   updated_at: string
   course: Course | null
@@ -203,6 +204,27 @@ export default function ResourceViewPage() {
   const [iframeError, setIframeError] = useState(false)
   const [copied, setCopied] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [viewCount, setViewCount] = useState(0)
+  const [downloadCount, setDownloadCount] = useState(0)
+  const hasTrackedView = React.useRef(false)
+
+  // Track view or download action
+  const trackAction = useCallback(async (action: 'view' | 'download') => {
+    try {
+      const response = await fetch(`/api/resources/${resourceId}/track`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action })
+      })
+      const data = await response.json()
+      if (data.success) {
+        setViewCount(data.view_count || 0)
+        setDownloadCount(data.download_count || 0)
+      }
+    } catch (err) {
+      console.error(`Failed to track ${action}:`, err)
+    }
+  }, [resourceId])
 
   // Fetch resource
   const fetchResource = useCallback(async () => {
@@ -214,6 +236,8 @@ export default function ResourceViewPage() {
 
       if (data.success) {
         setResource(data.resource)
+        setViewCount(data.resource.view_count || 0)
+        setDownloadCount(data.resource.download_count || 0)
       } else {
         setError(data.error || "Failed to fetch resource")
       }
@@ -230,6 +254,14 @@ export default function ResourceViewPage() {
       fetchResource()
     }
   }, [resourceId, fetchResource])
+
+  // Track view once when resource is loaded
+  useEffect(() => {
+    if (resource && !hasTrackedView.current) {
+      hasTrackedView.current = true
+      trackAction('view')
+    }
+  }, [resource, trackAction])
 
   // Format date
   const formatDate = (dateString: string) => {
@@ -299,8 +331,11 @@ export default function ResourceViewPage() {
   }
 
   // Download
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (resource?.content_url) {
+      // Track download
+      await trackAction('download')
+      
       const downloadUrl = getGoogleDriveDownloadUrl(resource.content_url)
       if (downloadUrl) {
         window.open(downloadUrl, "_blank")
@@ -652,8 +687,16 @@ export default function ResourceViewPage() {
                     <div className="flex items-center gap-3">
                       <Eye className="w-4 h-4 text-muted-foreground" />
                       <span className="text-sm">
+                        <span className="text-muted-foreground">Views:</span>{" "}
+                        <span className="font-medium">{viewCount}</span>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <Download className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm">
                         <span className="text-muted-foreground">Downloads:</span>{" "}
-                        <span className="font-medium">{resource.download_count}</span>
+                        <span className="font-medium">{downloadCount}</span>
                       </span>
                     </div>
 

@@ -58,6 +58,7 @@ interface Resource {
   academic_year: string | null
   is_downloadable: boolean
   download_count: number
+  view_count: number
   created_at: string
   updated_at: string
   course: Course | null
@@ -497,17 +498,17 @@ export default function ResourcesPage() {
         </CardContent>
 
         <CardFooter className="pt-3 border-t border-border/50 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Calendar className="w-3.5 h-3.5" />
-            {formatDate(resource.created_at)}
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Eye className="w-3.5 h-3.5" />
+              {resource.view_count || 0}
+            </span>
+            <span className="flex items-center gap-1">
+              <Download className="w-3.5 h-3.5" />
+              {resource.download_count || 0}
+            </span>
           </div>
           <div className="flex items-center gap-2">
-            {resource.download_count > 0 && (
-              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                <Download className="w-3.5 h-3.5" />
-                {resource.download_count}
-              </span>
-            )}
             <Button 
               size="sm" 
               onClick={() => openResource(resource)}
