@@ -1335,7 +1335,7 @@ const TopicItem = memo<TopicItemProps>(({
       </Button>
 
       {isExpanded && (
-        <div className={`${isMobile ? 'ml-5' : 'ml-6'} space-y-0.5 mt-1 mb-1 min-w-0 border-l-2 border-border/30 pl-2 animate-slideDown`}>
+        <div className={`${isMobile ? 'ml-5' : 'ml-6'} space-y-0.5 mt-0.5 mb-0.5 min-w-0 border-l-2 border-border/30 pl-2 animate-slideDown`}>
           {videos.map((video) => (
             <ContentItemButton
               key={video.id}
@@ -1420,7 +1420,7 @@ const ContentItemButton = memo<ContentItemButtonProps>(({
     <Button
       variant="ghost"
       data-content-id={id}
-      className={`w-full justify-start text-left ${isMobile ? 'px-2 py-1.5 min-h-[32px]' : 'px-2 py-1.5'} h-auto rounded-md min-w-0 transition-all duration-150 group ${
+      className={`w-full justify-start text-left px-2 py-1.5 h-auto rounded transition-all duration-150 min-w-0 group ${
         isSelected
           ? isVideo 
             ? "bg-red-500/10 dark:bg-red-500/20"
@@ -1430,9 +1430,9 @@ const ContentItemButton = memo<ContentItemButtonProps>(({
       onClick={handleClick}
     >
       <div className={`flex items-center gap-2 w-full min-w-0`}>
-        <div className={`flex-shrink-0 p-1 rounded transition-colors ${
+        <div className={`flex-shrink-0 transition-colors ${
           isSelected 
-            ? isVideo ? "bg-red-500/15 text-red-500" : "bg-blue-500/15 text-blue-500"
+            ? isVideo ? "text-red-500" : "text-blue-500"
             : isVideo ? "text-red-400/80 group-hover:text-red-500" : "text-blue-400/80 group-hover:text-blue-500"
         }`}>
           {isVideo ? (
@@ -1441,8 +1441,8 @@ const ContentItemButton = memo<ContentItemButtonProps>(({
             <FileText className="h-3 w-3 flex-shrink-0" />
           )}
         </div>
-        <span className={`text-[11px] leading-snug break-words min-w-0 flex-1 line-clamp-2 transition-colors ${
-          isSelected ? "font-semibold text-foreground" : "text-muted-foreground font-medium group-hover:text-foreground"
+        <span className={`text-xs truncate flex-1 transition-colors ${
+          isSelected ? "font-medium text-foreground" : "text-muted-foreground group-hover:text-foreground"
         }`}>
           {title}
         </span>
