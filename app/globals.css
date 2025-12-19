@@ -504,6 +504,16 @@
   }
 }
 
+/* Video Playing Animation - Soundbar Effect */
+@keyframes soundbar {
+  0%, 100% {
+    transform: scaleY(0.5);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;

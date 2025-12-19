@@ -1436,7 +1436,7 @@ const ContentItemButton = memo<ContentItemButtonProps>(({
             : isVideo ? "text-red-400/80 group-hover:text-red-500" : "text-blue-400/80 group-hover:text-blue-500"
         }`}>
           {isVideo ? (
-            <Play className="h-3 w-3 flex-shrink-0" />
+            <Play className={`h-3 w-3 flex-shrink-0 ${isSelected ? 'animate-pulse' : ''}`} fill={isSelected ? "currentColor" : "none"} />
           ) : (
             <FileText className="h-3 w-3 flex-shrink-0" />
           )}
@@ -1446,8 +1446,15 @@ const ContentItemButton = memo<ContentItemButtonProps>(({
         }`}>
           {title}
         </span>
-        {isSelected && (
-          <div className={`flex-shrink-0 w-1.5 h-1.5 ${isVideo ? 'bg-red-500' : 'bg-blue-500'} rounded-full`} />
+        {isSelected && isVideo && (
+          <div className="flex items-center gap-0.5 flex-shrink-0">
+            <span className="w-0.5 h-2 bg-red-500 rounded-full animate-[soundbar_0.5s_ease-in-out_infinite]" style={{ animationDelay: '0ms' }} />
+            <span className="w-0.5 h-3 bg-red-500 rounded-full animate-[soundbar_0.5s_ease-in-out_infinite]" style={{ animationDelay: '150ms' }} />
+            <span className="w-0.5 h-2 bg-red-500 rounded-full animate-[soundbar_0.5s_ease-in-out_infinite]" style={{ animationDelay: '300ms' }} />
+          </div>
+        )}
+        {isSelected && !isVideo && (
+          <div className={`flex-shrink-0 w-1.5 h-1.5 bg-blue-500 rounded-full`} />
         )}
       </div>
     </Button>
