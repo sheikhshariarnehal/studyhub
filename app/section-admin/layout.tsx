@@ -5,6 +5,7 @@ import { SectionAdminSidebar } from "@/components/section-admin/section-admin-si
 import { SectionAdminHeader } from "@/components/section-admin/section-admin-header"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider, useAuth } from "@/contexts/auth-context"
+import { AnalyticsWrapper } from "@/components/analytics-wrapper"
 import { Loader2 } from "lucide-react"
 
 function SectionAdminLayoutContent({ children }: { children: React.ReactNode }) {
@@ -44,11 +45,13 @@ function SectionAdminLayoutContent({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="min-h-screen bg-background">
-      <SectionAdminSidebar user={user} />
-      <div className="lg:pl-64">
-        <SectionAdminHeader user={user} />
-        <main className="p-6">{children}</main>
-      </div>
+      <AnalyticsWrapper user={user}>
+        <SectionAdminSidebar user={user} />
+        <div className="lg:pl-64">
+          <SectionAdminHeader user={user} />
+          <main className="p-6">{children}</main>
+        </div>
+      </AnalyticsWrapper>
     </div>
   )
 }

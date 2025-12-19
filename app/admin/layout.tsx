@@ -9,6 +9,7 @@ import { AdminSidebar } from "@/components/admin/admin-sidebar"
 import { AdminHeader } from "@/components/admin/admin-header"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider, useAuth } from "@/contexts/auth-context"
+import { AnalyticsWrapper } from "@/components/analytics-wrapper"
 import { Loader2, AlertCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -84,11 +85,13 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <AdminSidebar user={user} />
-      <div className="lg:pl-64 flex flex-col min-h-screen">
-        <AdminHeader user={user} />
-        <main className="flex-1 p-6 pt-4">{children}</main>
-      </div>
+      <AnalyticsWrapper user={user}>
+        <AdminSidebar user={user} />
+        <div className="lg:pl-64 flex flex-col min-h-screen">
+          <AdminHeader user={user} />
+          <main className="flex-1 p-6 pt-4">{children}</main>
+        </div>
+      </AnalyticsWrapper>
     </div>
   )
 }
