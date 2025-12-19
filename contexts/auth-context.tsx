@@ -1,7 +1,6 @@
 "use client"
 
 import React, { createContext, useContext, useEffect, useState } from "react"
-import { trackStudentLogin } from "@/components/student-analytics-provider"
 
 export interface AdminUser {
   id: string
@@ -109,12 +108,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (data.success) {
         console.log("✅ AuthContext login successful")
         setUser(data.user)
-        
-        // Track student login event for analytics
-        if (data.user?.id) {
-          trackStudentLogin(data.user.id, data.user.role || "student")
-        }
-        
         // Force page reload to clear any cached state
         await checkAuth()
         return { success: true }
