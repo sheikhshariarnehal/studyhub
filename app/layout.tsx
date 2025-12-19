@@ -192,8 +192,8 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen bg-background text-foreground font-sans antialiased" suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange={false}>
-          <GlobalAnalytics />
           <Suspense fallback={null}>
+            <GlobalAnalytics />
             <div className="relative flex min-h-screen flex-col">{children}</div>
           </Suspense>
         </ThemeProvider>
