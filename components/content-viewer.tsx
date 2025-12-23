@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback, memo, useMemo } from "react"
+import React, { useState, useEffect, useRef, useCallback, memo, useMemo } from "react"
 import {
   Loader2, AlertCircle, FileText, Play, BookOpen, ExternalLink, Maximize2, RotateCcw,
   ZoomIn, ZoomOut, RotateCw, Volume2, VolumeX, Settings, Share2, Bookmark,
@@ -34,7 +34,7 @@ interface ContentViewerProps {
   isLoading?: boolean
 }
 
-export const ContentViewer = memo(function ContentViewer({ content, isLoading = false }: ContentViewerProps) {
+const ContentViewerComponent = function ContentViewer({ content, isLoading = false }: ContentViewerProps) {
   const [iframeLoading, setIframeLoading] = useState(true)
   const [iframeError, setIframeError] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -1021,4 +1021,7 @@ export const ContentViewer = memo(function ContentViewer({ content, isLoading = 
       )}
     </div>
   )
-})
+}
+
+export const ContentViewer = memo(ContentViewerComponent)
+ContentViewer.displayName = "ContentViewer"

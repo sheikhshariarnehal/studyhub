@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { cookies } from "next/headers"
 import { createClient } from "@/lib/supabase"
 import jwt from "jsonwebtoken"
 
@@ -10,7 +11,8 @@ export const revalidate = 0
 
 export async function POST(request: NextRequest) {
   try {
-    const token = request.cookies.get("admin_token")?.value
+    const cookieStore = await cookies()
+    const token = cookieStore.get("admin_token")?.value
 
     if (token) {
       try {
@@ -33,13 +35,19 @@ export async function POST(request: NextRequest) {
       message: "Logged out successfully"
     })
 
-    // Clear the cookie
-    response.cookies.set("admin_token", "", {
+    // Clear all auth cookies
+    const isProd = process.env.NODE_ENV === "production"
+    const clearOptions = {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 0
-    })
+      secure: isProd,
+      sameSite: (isProd ? "none" : "lax") as any,
+      maxAge: 0,
+      path: "/"
+    }
+
+    cookieStore.set("admin_token", "", clearOptions)
+    cookieStore.set("jwt", "", clearOptions)
+    cookieStore.set("token", "", clearOptions)
 
     // Add cache control headers to prevent caching
     response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')

@@ -28,8 +28,11 @@ export default function LoginPage() {
         })
         if (response.ok) {
           const data = await response.json()
-          if (data.success) {
-            window.location.href = "/admin" // Force full page reload
+          if (data.success && data.user) {
+            // Redirect based on role
+            const adminRoles = ['super_admin', 'admin', 'moderator', 'content_creator', 'section_admin']
+            const redirectUrl = adminRoles.includes(data.user.role) ? "/admin" : "/dashboard"
+            window.location.href = redirectUrl // Force full page reload
           }
         }
       } catch (error) {

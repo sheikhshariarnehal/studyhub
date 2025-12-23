@@ -48,14 +48,26 @@ function verifyJWT(token: string): JWTPayload {
     throw new Error('Invalid token format')
   }
 
-  const payload = JSON.parse(atob(parts[1])) as JWTPayload
+  try {
+    // Handle base64url encoding (standard for JWT)
+    let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const pad = base64.length % 4
+    if (pad) {
+      if (pad === 1) throw new Error('Invalid base64 string')
+      base64 += new Array(5 - pad).join('=')
+    }
+    
+    const payload = JSON.parse(atob(base64)) as JWTPayload
 
-  // Check expiration
-  if (payload.exp && Date.now() >= payload.exp * 1000) {
-    throw new Error('Token expired')
+    // Check expiration
+    if (payload.exp && Date.now() >= payload.exp * 1000) {
+      throw new Error('Token expired')
+    }
+
+    return payload
+  } catch (e) {
+    throw new Error('Failed to decode token: ' + (e as Error).message)
   }
-
-  return payload
 }
 
 // ============================================
@@ -77,7 +89,9 @@ function handleAdminAuth(
   pathname: string,
   loginRedirect: string = "/admin/login"
 ): NextResponse | null {
-  const token = request.cookies.get("admin_token")?.value
+  const token = request.cookies.get("admin_token")?.value || 
+                request.cookies.get("jwt")?.value || 
+                request.cookies.get("token")?.value
 
   log(`🔍 Admin route: ${pathname}`)
   log(`🔍 Token: ${token ? 'Present' : 'Missing'}`)
@@ -126,43 +140,55 @@ function handleShareableUrl(request: NextRequest, pathname: string): NextRespons
 }
 
 // ============================================
-// Main Proxy Function (Next.js 16+)
+// Main Middleware Function (Next.js 16+)
 // ============================================
 
-export function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl
+export function middleware(request: NextRequest) {
+  console.log(`[Middleware] Request: ${request.nextUrl.pathname}`)
+  try {
+    const { pathname } = request.nextUrl
 
-  log("\n--- Proxy Request ---")
-  log("Path:", pathname)
+    log("\n--- Middleware Request ---")
+    log("Path:", pathname)
 
-  // Create base response with analytics headers
-  const baseResponse = NextResponse.next()
-  baseResponse.headers.set('x-pathname', pathname)
-  baseResponse.headers.set('x-timestamp', new Date().toISOString())
+    // Create base response with analytics headers
+    const baseResponse = NextResponse.next()
+    baseResponse.headers.set('x-pathname', pathname)
+    baseResponse.headers.set('x-timestamp', new Date().toISOString())
 
-  // ---- Login Pages (No Auth Required) ----
-  if (pathname === "/login" || pathname === "/admin/login") {
-    log("→ Login page, allowing access")
+    // ---- Login Pages (No Auth Required) ----
+    if (pathname === "/login" || pathname === "/admin/login" || pathname === "/signup") {
+      log("→ Public page, allowing access")
+      return baseResponse
+    }
+
+    // ---- Admin Routes ----
+    if (pathname.startsWith("/admin")) {
+      const authResponse = handleAdminAuth(request, pathname, "/admin/login")
+      return authResponse || NextResponse.next()
+    }
+
+    // ---- Section Admin Routes ----
+    if (pathname.startsWith("/section-admin")) {
+      const authResponse = handleAdminAuth(request, pathname, "/admin/login")
+      return authResponse || NextResponse.next()
+    }
+
+    // ---- Dashboard Routes (Contributors) ----
+    if (pathname.startsWith("/dashboard")) {
+      const authResponse = handleAdminAuth(request, pathname, "/login")
+      return authResponse || NextResponse.next()
+    }
+
+    // ---- Shareable URLs ----
+    const shareResponse = handleShareableUrl(request, pathname)
+    if (shareResponse) return shareResponse
+
     return baseResponse
+  } catch (error) {
+    console.error("Middleware error:", error)
+    return NextResponse.next()
   }
-
-  // ---- Admin Routes ----
-  if (pathname.startsWith("/admin")) {
-    const authResponse = handleAdminAuth(request, pathname)
-    return authResponse || NextResponse.next()
-  }
-
-  // ---- Section Admin Routes ----
-  if (pathname.startsWith("/section-admin")) {
-    const authResponse = handleAdminAuth(request, pathname, "/admin/login")
-    return authResponse || NextResponse.next()
-  }
-
-  // ---- Shareable URLs ----
-  const shareResponse = handleShareableUrl(request, pathname)
-  if (shareResponse) return shareResponse
-
-  return baseResponse
 }
 
 // ============================================
@@ -171,10 +197,20 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Admin routes
+    // Admin and Dashboard routes
+    '/admin',
     '/admin/:path*',
+    '/section-admin',
     '/section-admin/:path*',
+    '/dashboard',
+    '/dashboard/:path*',
     '/login',
+    '/signup',
+    '/admin/login',
+    // API routes that need protection
+    '/api/admin/:path*',
+    '/api/section-admin/:path*',
+    '/api/dashboard/:path*',
     // Legacy shareable URLs
     '/video/:path*',
     '/slide/:path*',

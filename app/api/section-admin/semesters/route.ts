@@ -7,7 +7,9 @@ const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-producti
 // Helper function to verify section admin authorization
 async function verifySectionAdmin(request: NextRequest) {
   try {
-    const token = request.cookies.get("admin_token")?.value
+    const token = request.cookies.get("admin_token")?.value || 
+                  request.cookies.get("jwt")?.value || 
+                  request.cookies.get("token")?.value
 
     if (!token) {
       return { error: "No token provided", status: 401 }
@@ -91,6 +93,9 @@ export async function GET(request: NextRequest) {
 
       return {
         ...semester,
+        name: semester.title, // Map title to name for frontend/test compatibility
+        year: semester.start_date ? new Date(semester.start_date).getFullYear().toString() : "2025",
+        status: semester.is_active ? "active" : "inactive",
         courses_count: coursesCount,
         topics_count: topicsCount,
         study_tools_count: studyToolsCount,
@@ -115,17 +120,23 @@ export async function POST(request: NextRequest) {
     const user = authResult.user!
     const body = await request.json()
 
+    // Support both nested { semester: {...} } and flat {...} payloads
+    const semesterData = body.semester || body
+    const courses = body.courses || []
+
     // Validate required fields
-    const { semester, courses = [] } = body
-    if (!semester || !semester.title || !semester.section) {
+    const title = semesterData.title || semesterData.name
+    const section = semesterData.section || user.department || "General"
+
+    if (!title) {
       return NextResponse.json(
-        { error: "Missing required fields: title and section" },
+        { error: "Missing required field: title (or name)" },
         { status: 400 }
       )
     }
 
     // For section admin, ensure they can only create semesters for their section
-    if (user.role === "section_admin" && user.department && semester.section !== user.department) {
+    if (user.role === "section_admin" && user.department && section !== user.department) {
       return NextResponse.json(
         { error: "You can only create semesters for your assigned section" },
         { status: 403 }
@@ -136,15 +147,15 @@ export async function POST(request: NextRequest) {
     const { data: newSemester, error: semesterError } = await supabase
       .from("semesters")
       .insert({
-        title: semester.title,
-        description: semester.description || "",
-        section: semester.section,
-        has_midterm: semester.has_midterm ?? true,
-        has_final: semester.has_final ?? true,
-        start_date: semester.start_date || null,
-        end_date: semester.end_date || null,
-        default_credits: semester.default_credits || 3,
-        is_active: semester.is_active ?? true,
+        title: title,
+        description: semesterData.description || "",
+        section: section,
+        has_midterm: semesterData.has_midterm ?? true,
+        has_final: semesterData.has_final ?? true,
+        start_date: semesterData.start_date || null,
+        end_date: semesterData.end_date || null,
+        default_credits: semesterData.default_credits || 3,
+        is_active: semesterData.is_active ?? true,
         created_by: user.id
       })
       .select()
@@ -251,11 +262,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      semester: newSemester,
-      message: "Semester created successfully"
-    })
+    // Map title to name for frontend/test compatibility
+    const responseSemester = {
+      ...newSemester,
+      name: newSemester.title,
+      year: newSemester.start_date ? new Date(newSemester.start_date).getFullYear().toString() : "2025",
+      status: newSemester.is_active ? "active" : "inactive"
+    }
+
+    return NextResponse.json(responseSemester, { status: 201 })
   } catch (error) {
     console.error("API error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -23,11 +23,24 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      isValid: !!tokenData,
+      cookiePresent: !!adminToken,
+      jwtValid: !!tokenData,
+      decodedJwt: tokenData,
+      error: null,
+      email: (tokenData as any)?.email || null,
+      role: (tokenData as any)?.role || null,
       cookies: allCookies,
       adminToken: adminToken ? "EXISTS" : "NOT FOUND",
       tokenLength: adminToken ? adminToken.length : 0,
       tokenData,
-      jwtSecretLength: JWT_SECRET.length
+      jwtSecretLength: JWT_SECRET.length,
+      jwt_valid: !!tokenData,
+      debugInfo: {
+        cookieCount: allCookies.length,
+        hasAdminToken: !!adminToken,
+        message: "Cookie testing endpoint"
+      }
     })
 
   } catch (error) {

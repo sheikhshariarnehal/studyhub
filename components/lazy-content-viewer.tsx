@@ -1,6 +1,6 @@
 "use client"
 
-import { lazy, Suspense, memo } from "react"
+import React, { lazy, Suspense, memo } from "react"
 import { Loader2 } from "lucide-react"
 
 // Lazy load the heavy ContentViewer component
@@ -45,7 +45,7 @@ const ContentViewerSkeleton = memo(() => (
 
 ContentViewerSkeleton.displayName = "ContentViewerSkeleton"
 
-export const LazyContentViewer = memo(function LazyContentViewer({ 
+const LazyContentViewerComponent = function LazyContentViewer({ 
   content, 
   isLoading = false 
 }: LazyContentViewerProps) {
@@ -54,4 +54,7 @@ export const LazyContentViewer = memo(function LazyContentViewer({
       <ContentViewer content={content} isLoading={isLoading} />
     </Suspense>
   )
-})
+}
+
+export const LazyContentViewer = memo(LazyContentViewerComponent)
+LazyContentViewer.displayName = "LazyContentViewer"

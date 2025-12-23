@@ -1,9 +1,6 @@
 'use client'
 
 import { useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react'
-import Link from 'next/link'
 
 export default function Error({
   error,
@@ -13,53 +10,182 @@ export default function Error({
   reset: () => void
 }) {
   useEffect(() => {
-    // Log the error to an error reporting service
     console.error('Application error:', error)
   }, [error])
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-orange-100 dark:from-gray-900 dark:to-gray-800">
-      <div className="max-w-md w-full mx-auto text-center px-6">
-        <div className="mb-8">
-          <div className="mx-auto w-16 h-16 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center mb-4">
-            <AlertTriangle className="w-8 h-8 text-red-600 dark:text-red-400" />
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #fef2f2 0%, #fff7ed 100%)',
+      }}
+    >
+      <div
+        style={{
+          maxWidth: '28rem',
+          width: '100%',
+          margin: '0 auto',
+          textAlign: 'center',
+          padding: '1.5rem',
+        }}
+      >
+        <div style={{ marginBottom: '2rem' }}>
+          <div
+            style={{
+              width: '4rem',
+              height: '4rem',
+              background: '#fee2e2',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1rem',
+            }}
+          >
+            <svg
+              width="32"
+              height="32"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#dc2626"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
           </div>
-          
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+
+          <h1
+            style={{
+              fontSize: '1.5rem',
+              fontWeight: 600,
+              color: '#111827',
+              marginBottom: '0.5rem',
+            }}
+          >
             Something went wrong!
           </h1>
-          
-          <p className="text-gray-600 dark:text-gray-400 mb-8">
+
+          <p
+            style={{
+              color: '#4b5563',
+              marginBottom: '2rem',
+            }}
+          >
             We encountered an unexpected error. Please try refreshing the page or go back to the home page.
           </p>
-          
-          {process.env.NODE_ENV === 'development' && (
-            <details className="text-left bg-gray-100 dark:bg-gray-800 p-4 rounded-lg mb-6">
-              <summary className="cursor-pointer font-medium text-sm">
-                Error Details (Development)
-              </summary>
-              <pre className="mt-2 text-xs text-red-600 dark:text-red-400 overflow-auto">
-                {error.message}
-              </pre>
-            </details>
-          )}
+
+          <details
+            style={{
+              textAlign: 'left',
+              background: '#f3f4f6',
+              padding: '1rem',
+              borderRadius: '0.5rem',
+              marginBottom: '1.5rem',
+            }}
+          >
+            <summary style={{ cursor: 'pointer', fontWeight: 500, fontSize: '0.875rem' }}>
+              Error Details
+            </summary>
+            <pre
+              style={{
+                marginTop: '0.5rem',
+                fontSize: '0.75rem',
+                color: '#dc2626',
+                overflow: 'auto',
+                maxHeight: '10rem',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}
+            >
+              {error.message}
+            </pre>
+            {error.digest && (
+              <p style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#6b7280' }}>
+                Error ID: {error.digest}
+              </p>
+            )}
+          </details>
         </div>
 
-        <div className="space-y-4">
-          <Button onClick={reset} className="w-full">
-            <RefreshCw className="w-4 h-4 mr-2" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <button
+            onClick={reset}
+            style={{
+              width: '100%',
+              padding: '0.75rem 1rem',
+              background: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '0.5rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 2v6h-6" />
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+              <path d="M3 22v-6h6" />
+              <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+            </svg>
             Try Again
-          </Button>
-          
-          <Button variant="outline" asChild className="w-full">
-            <Link href="/">
-              <Home className="w-4 h-4 mr-2" />
-              Go Home
-            </Link>
-          </Button>
+          </button>
+
+          <a
+            href="/"
+            style={{
+              width: '100%',
+              padding: '0.75rem 1rem',
+              background: 'white',
+              color: '#374151',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              textDecoration: 'none',
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              <polyline points="9 22 9 12 15 12 15 22" />
+            </svg>
+            Go Home
+          </a>
         </div>
 
-        <div className="mt-8 text-sm text-gray-500 dark:text-gray-400">
+        <div style={{ marginTop: '2rem', fontSize: '0.875rem', color: '#6b7280' }}>
           <p>If this problem persists, please contact support</p>
         </div>
       </div>
