@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useRouter, usePathname } from "next/navigation"
-import { Bell, Sun, User, Moon, Menu, X, LogOut, Settings, ChevronDown, BookOpen, GraduationCap, FolderOpen } from "lucide-react"
+import { Bell, Sun, User, Moon, Menu, X, LogOut, Settings, ChevronDown, BookOpen, GraduationCap, FolderOpen, LogIn } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
+import { useAuth } from "@/contexts/auth-context"
 
 interface HeaderProps {
   className?: string
@@ -17,6 +18,7 @@ export function Header({ className }: HeaderProps) {
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [isNotificationOpen, setIsNotificationOpen] = useState(false)
   const { theme, setTheme } = useTheme()
+  const { user, loading, logout } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const profileRef = useRef<HTMLDivElement>(null)
@@ -66,6 +68,12 @@ export function Header({ className }: HeaderProps) {
   ]
 
   const unreadCount = notifications.filter(n => n.unread).length
+
+  const handleLogout = async () => {
+    await logout()
+    setIsProfileOpen(false)
+    router.push("/")
+  }
 
   if (!mounted) {
     return null
@@ -157,83 +165,111 @@ export function Header({ className }: HeaderProps) {
               )}
             </Button>
 
-            {/* Profile Dropdown */}
+            {/* Profile Dropdown or Login Button */}
             <div className="relative hidden sm:block" ref={profileRef}>
-              <Button
-                variant="ghost"
-                className="h-10 px-3 rounded-xl hover:bg-accent/60 transition-all duration-200 flex items-center gap-2.5 hover:scale-105"
-                onClick={() => setIsProfileOpen(!isProfileOpen)}
-              >
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 border-2 border-primary/30 flex items-center justify-center shadow-sm">
-                  <User className="h-4 w-4 text-primary" />
-                </div>
-                <ChevronDown className={cn(
-                  "h-3.5 w-3.5 text-muted-foreground transition-transform duration-200",
-                  isProfileOpen && "rotate-180"
-                )} />
-              </Button>
+              {user ? (
+                <>
+                  <Button
+                    variant="ghost"
+                    className="h-10 px-3 rounded-xl hover:bg-accent/60 transition-all duration-200 flex items-center gap-2.5 hover:scale-105"
+                    onClick={() => setIsProfileOpen(!isProfileOpen)}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/10 border-2 border-primary/30 flex items-center justify-center shadow-sm">
+                      <User className="h-4 w-4 text-primary" />
+                    </div>
+                    <span className="hidden md:block text-sm font-medium max-w-[100px] truncate">
+                      {user.full_name?.split(' ')[0] || 'User'}
+                    </span>
+                    <ChevronDown className={cn(
+                      "h-3.5 w-3.5 text-muted-foreground transition-transform duration-200",
+                      isProfileOpen && "rotate-180"
+                    )} />
+                  </Button>
 
-              {/* Profile Dropdown Menu */}
-              {isProfileOpen && (
-                <div className="absolute right-0 mt-3 w-60 bg-background border border-border/50 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="p-4 border-b border-border/50 bg-gradient-to-br from-primary/5 to-transparent">
-                    <p className="font-semibold text-base">Student Name</p>
-                    <p className="text-xs text-muted-foreground mt-1">student@diu.edu.bd</p>
-                  </div>
-                  <div className="py-2 px-2">
-                    <button
-                      className="w-full px-3 py-2.5 text-left text-sm hover:bg-accent/60 rounded-lg transition-all duration-200 flex items-center gap-3 font-medium"
-                      onClick={() => {
-                        handleNavigation("/profile")
-                        setIsProfileOpen(false)
-                      }}
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <User className="h-4 w-4 text-primary" />
+                  {/* Profile Dropdown Menu */}
+                  {isProfileOpen && (
+                    <div className="absolute right-0 mt-3 w-60 bg-background border border-border/50 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="p-4 border-b border-border/50 bg-gradient-to-br from-primary/5 to-transparent">
+                        <p className="font-semibold text-base">{user.full_name || 'User'}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{user.email}</p>
+                        <span className="inline-block mt-2 px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary rounded-full capitalize">
+                          {user.role?.replace('_', ' ') || 'User'}
+                        </span>
                       </div>
-                      <span>My Profile</span>
-                    </button>
-                    <button
-                      className="w-full px-3 py-2.5 text-left text-sm hover:bg-accent/60 rounded-lg transition-all duration-200 flex items-center gap-3 font-medium"
-                      onClick={() => {
-                        handleNavigation("/settings")
-                        setIsProfileOpen(false)
-                      }}
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Settings className="h-4 w-4 text-primary" />
+                      <div className="py-2 px-2">
+                        <button
+                          className="w-full px-3 py-2.5 text-left text-sm hover:bg-accent/60 rounded-lg transition-all duration-200 flex items-center gap-3 font-medium"
+                          onClick={() => {
+                            handleNavigation("/profile")
+                            setIsProfileOpen(false)
+                          }}
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <User className="h-4 w-4 text-primary" />
+                          </div>
+                          <span>My Profile</span>
+                        </button>
+                        <button
+                          className="w-full px-3 py-2.5 text-left text-sm hover:bg-accent/60 rounded-lg transition-all duration-200 flex items-center gap-3 font-medium"
+                          onClick={() => {
+                            handleNavigation("/dashboard")
+                            setIsProfileOpen(false)
+                          }}
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <Settings className="h-4 w-4 text-primary" />
+                          </div>
+                          <span>Dashboard</span>
+                        </button>
                       </div>
-                      <span>Settings</span>
-                    </button>
-                  </div>
-                  <div className="border-t border-border/50 p-2">
-                    <button
-                      className="w-full px-3 py-2.5 text-left text-sm hover:bg-destructive/10 rounded-lg text-destructive transition-all duration-200 flex items-center gap-3 font-medium"
-                      onClick={() => {
-                        // Add logout logic here
-                        setIsProfileOpen(false)
-                      }}
-                    >
-                      <div className="w-8 h-8 rounded-lg bg-destructive/10 flex items-center justify-center">
-                        <LogOut className="h-4 w-4 text-destructive" />
+                      <div className="border-t border-border/50 p-2">
+                        <button
+                          className="w-full px-3 py-2.5 text-left text-sm hover:bg-destructive/10 rounded-lg text-destructive transition-all duration-200 flex items-center gap-3 font-medium"
+                          onClick={handleLogout}
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-destructive/10 flex items-center justify-center">
+                            <LogOut className="h-4 w-4 text-destructive" />
+                          </div>
+                          <span>Log Out</span>
+                        </button>
                       </div>
-                      <span>Log Out</span>
-                    </button>
-                  </div>
-                </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <Button
+                  variant="default"
+                  className="h-10 px-4 rounded-xl transition-all duration-200 flex items-center gap-2 hover:scale-105"
+                  onClick={() => handleNavigation("/login")}
+                >
+                  <LogIn className="h-4 w-4" />
+                  <span>Login</span>
+                </Button>
               )}
             </div>
 
-            {/* Mobile Profile Icon */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="sm:hidden w-10 h-10 rounded-xl hover:bg-accent/60 transition-all duration-200 hover:scale-105"
-              onClick={() => handleNavigation("/profile")}
-              title="Profile"
-            >
-              <User className="h-4 w-4" />
-            </Button>
+            {/* Mobile Profile/Login Icon */}
+            {user ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="sm:hidden w-10 h-10 rounded-xl hover:bg-accent/60 transition-all duration-200 hover:scale-105"
+                onClick={() => handleNavigation("/profile")}
+                title="Profile"
+              >
+                <User className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                variant="default"
+                size="icon"
+                className="sm:hidden w-10 h-10 rounded-xl transition-all duration-200 hover:scale-105"
+                onClick={() => handleNavigation("/login")}
+                title="Login"
+              >
+                <LogIn className="h-4 w-4" />
+              </Button>
+            )}
 
             {/* Mobile Menu Toggle */}
             <Button
