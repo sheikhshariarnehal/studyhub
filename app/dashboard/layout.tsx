@@ -109,9 +109,9 @@ function DashboardLayoutContent({ children }: { children: React.ReactNode }) {
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <div className="min-h-screen bg-background">
         <DashboardSidebar user={user} />
-        <div className="lg:pl-64">
+        <div className="lg:pl-64 flex flex-col min-h-screen">
           <DashboardHeader user={user} />
-          <main className="p-4 lg:p-6">{children}</main>
+          <main className="flex-1 p-4 lg:p-6 bg-background">{children}</main>
         </div>
       </div>
     </ThemeProvider>

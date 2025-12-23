@@ -66,7 +66,7 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
   }
 
   return (
-    <header className="sticky top-0 z-40 h-16 bg-background/95 backdrop-blur-sm border-b border-border">
+    <header className="sticky top-0 z-40 h-16 bg-card border-b border-border">
       <div className="flex items-center justify-between h-full px-4 lg:px-6">
         {/* Left side - Page title area (hidden on mobile, shown on larger screens) */}
         <div className="hidden lg:flex items-center gap-4">
