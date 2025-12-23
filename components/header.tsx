@@ -167,7 +167,10 @@ export function Header({ className }: HeaderProps) {
 
             {/* Profile Dropdown or Login Button */}
             <div className="relative hidden sm:block" ref={profileRef}>
-              {user ? (
+              {loading ? (
+                /* Loading skeleton - prevents flash between login/profile */
+                <div className="h-10 w-24 rounded-xl bg-muted/50 animate-pulse" />
+              ) : user ? (
                 <>
                   <Button
                     variant="ghost"
@@ -249,7 +252,10 @@ export function Header({ className }: HeaderProps) {
             </div>
 
             {/* Mobile Profile/Login Icon */}
-            {user ? (
+            {loading ? (
+              /* Loading skeleton for mobile */
+              <div className="sm:hidden w-10 h-10 rounded-xl bg-muted/50 animate-pulse" />
+            ) : user ? (
               <Button
                 variant="ghost"
                 size="icon"

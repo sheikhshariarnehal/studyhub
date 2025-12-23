@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useCallback, useMemo } from "react"
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { 
   ArrowLeft, 
@@ -29,7 +29,10 @@ import {
   Link2,
   UserCircle,
   Settings,
-  ExternalLink
+  ExternalLink,
+  Upload,
+  ImagePlus,
+  Trash2
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -261,6 +264,9 @@ export default function ProfilePage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [imageError, setImageError] = useState(false)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -362,6 +368,111 @@ export default function ProfilePage() {
     }))
   }, [])
 
+  // Handle avatar file selection
+  const handleAvatarSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file (JPG, PNG, GIF, WebP)')
+      return
+    }
+
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image size must be less than 5MB')
+      return
+    }
+
+    setUploadingAvatar(true)
+    setError(null)
+
+    try {
+      // Convert to base64
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        const base64 = e.target?.result as string
+        setAvatarPreview(base64)
+
+        // Upload to server
+        try {
+          const response = await fetch('/api/user/upload-avatar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ image: base64 })
+          })
+
+          const data = await response.json()
+
+          if (data.success) {
+            setProfile(prev => prev ? { ...prev, avatar_url: base64 } : null)
+            setFormData(prev => ({ ...prev, avatarUrl: base64 }))
+            setSuccess('Profile photo uploaded successfully!')
+            setImageError(false)
+            setTimeout(() => setSuccess(null), 4000)
+          } else {
+            setError(data.error || 'Failed to upload avatar')
+            setAvatarPreview(null)
+          }
+        } catch (err) {
+          setError('Failed to upload avatar')
+          setAvatarPreview(null)
+          console.error(err)
+        } finally {
+          setUploadingAvatar(false)
+        }
+      }
+      reader.onerror = () => {
+        setError('Failed to read image file')
+        setUploadingAvatar(false)
+      }
+      reader.readAsDataURL(file)
+    } catch (err) {
+      setError('Failed to process image')
+      setUploadingAvatar(false)
+      console.error(err)
+    }
+
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }, [])
+
+  // Remove avatar
+  const handleRemoveAvatar = useCallback(async () => {
+    setUploadingAvatar(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/user/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ avatarUrl: null })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setProfile(prev => prev ? { ...prev, avatar_url: null } : null)
+        setFormData(prev => ({ ...prev, avatarUrl: '' }))
+        setAvatarPreview(null)
+        setSuccess('Profile photo removed!')
+        setTimeout(() => setSuccess(null), 4000)
+      } else {
+        setError(data.error || 'Failed to remove avatar')
+      }
+    } catch (err) {
+      setError('Failed to remove avatar')
+      console.error(err)
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }, [])
+
   const handleSave = useCallback(async () => {
     setSaving(true)
     setError(null)
@@ -426,6 +537,7 @@ export default function ProfilePage() {
     setIsEditing(false)
     setError(null)
     setImageError(false)
+    setAvatarPreview(null)
   }, [profile])
 
   const formatDate = useCallback((dateString: string) => {
@@ -505,7 +617,7 @@ export default function ProfilePage() {
   }
 
   const RoleIcon = roleInfo.icon
-  const avatarUrl = isEditing ? formData.avatarUrl : profile?.avatar_url
+  const displayAvatarUrl = avatarPreview || (isEditing ? formData.avatarUrl : profile?.avatar_url)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30">
@@ -602,9 +714,14 @@ export default function ProfilePage() {
                 <div className="flex flex-col items-center text-center">
                   {/* Avatar */}
                   <div className="relative mb-4 group">
-                    {avatarUrl && !imageError ? (
+                    {uploadingAvatar && (
+                      <div className="absolute inset-0 w-28 h-28 rounded-full bg-background/80 flex items-center justify-center z-10">
+                        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                      </div>
+                    )}
+                    {displayAvatarUrl && !imageError ? (
                       <img 
-                        src={avatarUrl} 
+                        src={displayAvatarUrl} 
                         alt={profile?.full_name || "Profile"}
                         className="w-28 h-28 rounded-full object-cover border-4 border-background shadow-2xl ring-4 ring-primary/10 transition-transform group-hover:scale-105"
                         onError={() => setImageError(true)}
@@ -617,10 +734,22 @@ export default function ProfilePage() {
                       </div>
                     )}
                     {isEditing && (
-                      <div className="absolute -bottom-1 -right-1 p-2.5 bg-primary rounded-full text-primary-foreground shadow-lg cursor-pointer hover:scale-110 transition-transform">
+                      <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploadingAvatar}
+                        className="absolute -bottom-1 -right-1 p-2.5 bg-primary rounded-full text-primary-foreground shadow-lg cursor-pointer hover:scale-110 transition-transform disabled:opacity-50"
+                      >
                         <Camera className="w-4 h-4" />
-                      </div>
+                      </button>
                     )}
+                    {/* Hidden file input */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarSelect}
+                      className="hidden"
+                    />
                   </div>
 
                   {/* Name and Role */}
@@ -804,7 +933,7 @@ export default function ProfilePage() {
 
           {/* Right Column */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Avatar URL (when editing) */}
+            {/* Avatar Upload (when editing) */}
             {isEditing && (
               <Card className="border-0 shadow-xl overflow-hidden">
                 <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10 border-b">
@@ -814,25 +943,98 @@ export default function ProfilePage() {
                     </div>
                     <div>
                       <CardTitle className="text-lg">Profile Picture</CardTitle>
-                      <CardDescription>Enter a URL for your profile picture</CardDescription>
+                      <CardDescription>Upload a photo or enter a URL</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent className="pt-6">
-                  <div className="space-y-3">
-                    <Label className="text-sm font-medium">Avatar URL</Label>
-                    <Input
-                      value={formData.avatarUrl}
-                      onChange={(e) => {
-                        handleInputChange("avatarUrl", e.target.value)
-                        setImageError(false)
-                      }}
-                      placeholder="https://example.com/your-photo.jpg"
-                      className="h-12 bg-muted/50 border-0"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Enter a direct link to your profile picture (HTTPS URLs only). Recommended size: 200x200px
-                    </p>
+                  <div className="space-y-6">
+                    {/* Upload Section */}
+                    <div className="space-y-4">
+                      <Label className="text-sm font-medium">Upload Photo</Label>
+                      <div 
+                        onClick={() => !uploadingAvatar && fileInputRef.current?.click()}
+                        className={cn(
+                          "border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all",
+                          "hover:border-primary/50 hover:bg-primary/5",
+                          uploadingAvatar && "opacity-50 cursor-not-allowed",
+                          "border-muted-foreground/25"
+                        )}
+                      >
+                        {uploadingAvatar ? (
+                          <div className="flex flex-col items-center gap-3">
+                            <Loader2 className="w-10 h-10 text-primary animate-spin" />
+                            <p className="text-sm text-muted-foreground">Uploading...</p>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center gap-3">
+                            <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                              <ImagePlus className="w-8 h-8 text-primary" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">Click to upload photo</p>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                JPG, PNG, GIF or WebP. Max 5MB.
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Current avatar preview with remove option */}
+                      {displayAvatarUrl && !imageError && (
+                        <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-xl">
+                          <img 
+                            src={displayAvatarUrl} 
+                            alt="Current avatar"
+                            className="w-16 h-16 rounded-full object-cover border-2 border-background"
+                            onError={() => setImageError(true)}
+                          />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">Current Photo</p>
+                            <p className="text-xs text-muted-foreground">Click above to change</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleRemoveAvatar}
+                            disabled={uploadingAvatar}
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Remove
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Divider */}
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t border-muted-foreground/20" />
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-card px-2 text-muted-foreground">Or use URL</span>
+                      </div>
+                    </div>
+
+                    {/* URL Input */}
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium">Avatar URL</Label>
+                      <Input
+                        value={formData.avatarUrl}
+                        onChange={(e) => {
+                          handleInputChange("avatarUrl", e.target.value)
+                          setImageError(false)
+                          setAvatarPreview(null)
+                        }}
+                        placeholder="https://example.com/your-photo.jpg"
+                        className="h-12 bg-muted/50 border-0"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Enter a direct link to your profile picture (HTTPS URLs only)
+                      </p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
