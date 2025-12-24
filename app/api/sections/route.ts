@@ -16,16 +16,10 @@ export async function GET(request: NextRequest) {
 
     const supabase = createClient()
 
+    // Query sections without foreign key relation (may not exist)
     let query = supabase
       .from("sections")
-      .select(`
-        *,
-        departments (
-          id,
-          name,
-          short_name
-        )
-      `)
+      .select("*")
       .order("order_index", { ascending: true })
 
     if (activeOnly) {
@@ -43,6 +37,14 @@ export async function GET(request: NextRequest) {
     const { data: sections, error } = await query
 
     if (error) {
+      // If table doesn't exist, return empty array instead of error
+      if (error.code === "42P01" || error.message?.includes("does not exist")) {
+        console.log("Sections table does not exist, returning empty array")
+        return NextResponse.json({
+          success: true,
+          sections: []
+        })
+      }
       console.error("Error fetching sections:", error)
       return NextResponse.json(
         { success: false, error: "Failed to fetch sections" },

@@ -26,6 +26,14 @@ export async function GET(request: NextRequest) {
     const { data: departments, error } = await query
 
     if (error) {
+      // If table doesn't exist, return empty array instead of error
+      if (error.code === "42P01" || error.message?.includes("does not exist")) {
+        console.log("Departments table does not exist, returning empty array")
+        return NextResponse.json({
+          success: true,
+          departments: []
+        })
+      }
       console.error("Error fetching departments:", error)
       return NextResponse.json(
         { success: false, error: "Failed to fetch departments" },

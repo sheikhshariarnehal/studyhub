@@ -10,7 +10,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { compressImage, validateImageFile } from "@/lib/image-compression"
+import { cn } from "@/lib/utils"
 import {
   User,
   Mail,
@@ -33,6 +36,8 @@ import {
   ArrowLeft,
   Upload,
   Trash2,
+  Users,
+  Search,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -42,12 +47,29 @@ interface Batch {
   batch_name: string
 }
 
+interface Department {
+  id: string
+  name: string
+  short_name: string
+  faculty?: string
+  is_active: boolean
+}
+
+interface Section {
+  id: string
+  name: string
+  department_id?: string
+  is_active: boolean
+}
+
 interface UserProfile {
   id: string
   full_name: string
   email: string
   role: string
   department: string | null
+  department_id: string | null
+  section_id: string | null
   phone: string | null
   bio: string | null
   avatar_url: string | null
@@ -58,6 +80,8 @@ interface UserProfile {
   created_at: string
   updated_at: string
   batches: Batch | null
+  departments: Department | null
+  sections: Section | null
 }
 
 export default function DashboardProfilePage() {
@@ -66,17 +90,27 @@ export default function DashboardProfilePage() {
 
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [batches, setBatches] = useState<Batch[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
+  const [sections, setSections] = useState<Section[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const [showBatchDropdown, setShowBatchDropdown] = useState(false)
+  
+  // Searchable dropdown states
+  const [departmentOpen, setDepartmentOpen] = useState(false)
+  const [sectionOpen, setSectionOpen] = useState(false)
+  const [departmentSearch, setDepartmentSearch] = useState("")
+  const [sectionSearch, setSectionSearch] = useState("")
 
   // Form state
   const [fullName, setFullName] = useState("")
   const [phone, setPhone] = useState("")
   const [department, setDepartment] = useState("")
+  const [departmentId, setDepartmentId] = useState("")
+  const [sectionId, setSectionId] = useState("")
   const [studentId, setStudentId] = useState("")
   const [batchId, setBatchId] = useState("")
   const [bio, setBio] = useState("")
@@ -186,6 +220,8 @@ export default function DashboardProfilePage() {
           setFullName(p.full_name || "")
           setPhone(p.phone || "")
           setDepartment(p.department || "")
+          setDepartmentId(p.department_id || "")
+          setSectionId(p.section_id || "")
           setStudentId(p.student_id || "")
           setBatchId(p.batch_id || "")
           setBio(p.bio || "")
@@ -212,20 +248,34 @@ export default function DashboardProfilePage() {
     fetchProfile()
   }, [])
 
-  // Fetch batches
+  // Fetch batches, departments, and sections
   useEffect(() => {
-    const fetchBatches = async () => {
+    const fetchData = async () => {
       try {
-        const response = await fetch("/api/batches")
-        const data = await response.json()
-        if (data.success) {
-          setBatches(data.batches)
+        const [batchesRes, departmentsRes, sectionsRes] = await Promise.all([
+          fetch("/api/batches"),
+          fetch("/api/departments"),
+          fetch("/api/sections")
+        ])
+
+        const batchesData = await batchesRes.json()
+        const departmentsData = await departmentsRes.json()
+        const sectionsData = await sectionsRes.json()
+
+        if (batchesData.success) {
+          setBatches(batchesData.batches || [])
+        }
+        if (departmentsData.success) {
+          setDepartments(departmentsData.departments || [])
+        }
+        if (sectionsData.success) {
+          setSections(sectionsData.sections || [])
         }
       } catch (err) {
-        console.error("Error fetching batches:", err)
+        console.error("Error fetching data:", err)
       }
     }
-    fetchBatches()
+    fetchData()
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -250,6 +300,8 @@ export default function DashboardProfilePage() {
           fullName,
           phone: phone || null,
           department: department || null,
+          departmentId: departmentId || null,
+          sectionId: sectionId || null,
           studentId: studentId || null,
           batchId: batchId || null,
           bio: bio || null,
@@ -276,6 +328,21 @@ export default function DashboardProfilePage() {
   }
 
   const selectedBatch = batches.find((b) => b.id === batchId)
+  const selectedDepartment = departments.find((d) => d.id === departmentId)
+  const selectedSection = sections.find((s) => s.id === sectionId)
+
+  // Filter departments and sections based on search
+  const filteredDepartments = departments.filter(
+    (dept) =>
+      dept.name.toLowerCase().includes(departmentSearch.toLowerCase()) ||
+      dept.short_name.toLowerCase().includes(departmentSearch.toLowerCase()) ||
+      dept.faculty?.toLowerCase().includes(departmentSearch.toLowerCase())
+  )
+
+  const filteredSections = sections.filter(
+    (section) =>
+      section.name.toLowerCase().includes(sectionSearch.toLowerCase())
+  )
 
   if (isLoading) {
     return (
@@ -486,17 +553,155 @@ export default function DashboardProfilePage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="department" className="flex items-center gap-2">
+                <Label className="flex items-center gap-2">
                   <Building className="h-4 w-4" />
                   Department
                 </Label>
-                <Input
-                  id="department"
-                  placeholder="e.g., Computer Science & Engineering"
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                />
+                <Popover open={departmentOpen} onOpenChange={setDepartmentOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={departmentOpen}
+                      className="w-full justify-between font-normal"
+                    >
+                      {selectedDepartment 
+                        ? `${selectedDepartment.short_name} - ${selectedDepartment.name}`
+                        : "Select department..."}
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[350px] p-0" align="start">
+                    <Command>
+                      <CommandInput
+                        placeholder="Search department..."
+                        value={departmentSearch}
+                        onValueChange={setDepartmentSearch}
+                      />
+                      <CommandList>
+                        <CommandEmpty>No department found.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="none"
+                            onSelect={() => {
+                              setDepartmentId("")
+                              setDepartment("")
+                              setDepartmentOpen(false)
+                              setDepartmentSearch("")
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                !departmentId ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            No department selected
+                          </CommandItem>
+                          {filteredDepartments.map((dept) => (
+                            <CommandItem
+                              key={dept.id}
+                              value={`${dept.short_name} ${dept.name}`}
+                              onSelect={() => {
+                                setDepartmentId(dept.id)
+                                setDepartment(dept.name)
+                                setDepartmentOpen(false)
+                                setDepartmentSearch("")
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  departmentId === dept.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <div className="flex flex-col">
+                                <span className="font-medium">{dept.short_name} - {dept.name}</span>
+                                {dept.faculty && (
+                                  <span className="text-xs text-muted-foreground">{dept.faculty}</span>
+                                )}
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
+            </div>
+
+            {/* Section */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Section
+                </Label>
+                <Popover open={sectionOpen} onOpenChange={setSectionOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={sectionOpen}
+                      className="w-full justify-between font-normal"
+                    >
+                      {selectedSection ? selectedSection.name : "Select section..."}
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[200px] p-0" align="start">
+                    <Command>
+                      <CommandInput
+                        placeholder="Search section..."
+                        value={sectionSearch}
+                        onValueChange={setSectionSearch}
+                      />
+                      <CommandList>
+                        <CommandEmpty>No section found.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="none"
+                            onSelect={() => {
+                              setSectionId("")
+                              setSectionOpen(false)
+                              setSectionSearch("")
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                !sectionId ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            No section selected
+                          </CommandItem>
+                          {filteredSections.map((section) => (
+                            <CommandItem
+                              key={section.id}
+                              value={section.name}
+                              onSelect={() => {
+                                setSectionId(section.id)
+                                setSectionOpen(false)
+                                setSectionSearch("")
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  sectionId === section.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {section.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div />
             </div>
 
             {/* Student ID & Batch */}
