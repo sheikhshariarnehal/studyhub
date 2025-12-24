@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo, memo, useTransition } from "react"
 import { 
   Users, 
   Search, 
@@ -11,18 +11,17 @@ import {
   User, 
   MoreHorizontal,
   Trash2,
-  Edit,
   RefreshCw,
   ChevronLeft,
   ChevronRight,
   UserCheck,
-  UserX,
   AlertCircle,
-  Clock
+  Clock,
+  Loader2
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
   Select,
@@ -56,14 +55,16 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
+import { Skeleton } from "@/components/ui/skeleton"
 
+// Types
 interface Batch {
   id: string
   batch_number: number
   batch_name: string
 }
 
-interface User {
+interface UserData {
   id: string
   full_name: string
   email: string
@@ -90,6 +91,7 @@ interface Pagination {
   totalPages: number
 }
 
+// Constants - moved outside component to prevent recreation
 const ROLES = [
   { value: "super_admin", label: "Super Admin", color: "bg-red-500" },
   { value: "admin", label: "Admin", color: "bg-orange-500" },
@@ -97,10 +99,264 @@ const ROLES = [
   { value: "content_creator", label: "Content Creator", color: "bg-blue-500" },
   { value: "section_admin", label: "Section Admin", color: "bg-purple-500" },
   { value: "contributor", label: "Contributor", color: "bg-green-500" },
-]
+] as const
 
+const ROLE_MAP = new Map(ROLES.map(r => [r.value, r]))
+
+// Memoized Components
+const UserAvatar = memo(({ user }: { user: UserData }) => (
+  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold overflow-hidden">
+    {user.avatar_url ? (
+      <img 
+        src={user.avatar_url} 
+        alt={user.full_name}
+        className="w-full h-full object-cover"
+        loading="lazy"
+      />
+    ) : (
+      user.full_name.charAt(0).toUpperCase()
+    )}
+  </div>
+))
+UserAvatar.displayName = "UserAvatar"
+
+const RoleBadge = memo(({ role }: { role: string }) => {
+  const roleConfig = ROLE_MAP.get(role)
+  return (
+    <Badge 
+      variant="secondary" 
+      className={`${roleConfig?.color || "bg-gray-500"} text-white`}
+    >
+      {roleConfig?.label || role}
+    </Badge>
+  )
+})
+RoleBadge.displayName = "RoleBadge"
+
+const StatusBadge = memo(({ user }: { user: UserData }) => {
+  if (!user.is_approved) {
+    return (
+      <Badge variant="outline" className="text-yellow-600 border-yellow-600">
+        <Clock className="w-3 h-3 mr-1" />
+        Pending
+      </Badge>
+    )
+  }
+  if (!user.is_active) {
+    return (
+      <Badge variant="outline" className="text-red-600 border-red-600">
+        <XCircle className="w-3 h-3 mr-1" />
+        Inactive
+      </Badge>
+    )
+  }
+  return (
+    <Badge variant="outline" className="text-green-600 border-green-600">
+      <CheckCircle className="w-3 h-3 mr-1" />
+      Active
+    </Badge>
+  )
+})
+StatusBadge.displayName = "StatusBadge"
+
+const StatsCard = memo(({ title, value, icon: Icon, color }: { 
+  title: string
+  value: number
+  icon: React.ElementType
+  color?: string 
+}) => (
+  <Card>
+    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardTitle className="text-sm font-medium">{title}</CardTitle>
+      <Icon className={`h-4 w-4 ${color || "text-muted-foreground"}`} />
+    </CardHeader>
+    <CardContent>
+      <div className={`text-2xl font-bold ${color?.replace("text-", "text-") || ""}`}>
+        {value}
+      </div>
+    </CardContent>
+  </Card>
+))
+StatsCard.displayName = "StatsCard"
+
+// Loading skeleton for table rows
+const TableRowSkeleton = memo(() => (
+  <TableRow>
+    <TableCell>
+      <div className="flex items-center gap-3">
+        <Skeleton className="w-10 h-10 rounded-full" />
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-3 w-40" />
+        </div>
+      </div>
+    </TableCell>
+    <TableCell><Skeleton className="h-6 w-20" /></TableCell>
+    <TableCell><Skeleton className="h-6 w-16" /></TableCell>
+    <TableCell><Skeleton className="h-6 w-16" /></TableCell>
+    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+    <TableCell><Skeleton className="h-8 w-20 ml-auto" /></TableCell>
+  </TableRow>
+))
+TableRowSkeleton.displayName = "TableRowSkeleton"
+
+// Date formatter with caching
+const dateFormatCache = new Map<string, string>()
+const formatDate = (dateString: string | null): string => {
+  if (!dateString) return "Never"
+  
+  if (dateFormatCache.has(dateString)) {
+    return dateFormatCache.get(dateString)!
+  }
+  
+  const formatted = new Date(dateString).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  })
+  
+  dateFormatCache.set(dateString, formatted)
+  return formatted
+}
+
+// Debounce hook
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value)
+
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay)
+    return () => clearTimeout(handler)
+  }, [value, delay])
+
+  return debouncedValue
+}
+
+// User Row Component
+const UserRow = memo(({ 
+  user, 
+  onApprove, 
+  onToggleActive,
+  onChangeRole,
+  onDelete,
+  actionLoading,
+  processingUserId
+}: { 
+  user: UserData
+  onApprove: (user: UserData, approve: boolean) => void
+  onToggleActive: (user: UserData) => void
+  onChangeRole: (user: UserData) => void
+  onDelete: (user: UserData) => void
+  actionLoading: boolean
+  processingUserId: string | null
+}) => {
+  const isProcessing = processingUserId === user.id
+  
+  return (
+    <TableRow className={isProcessing ? "opacity-50" : ""}>
+      <TableCell>
+        <div className="flex items-center gap-3">
+          <UserAvatar user={user} />
+          <div>
+            <div className="font-medium">{user.full_name}</div>
+            <div className="text-sm text-muted-foreground">{user.email}</div>
+            {user.student_id && (
+              <div className="text-xs text-muted-foreground">ID: {user.student_id}</div>
+            )}
+          </div>
+        </div>
+      </TableCell>
+      <TableCell><RoleBadge role={user.role} /></TableCell>
+      <TableCell>
+        {user.batches ? (
+          <Badge variant="outline">Batch {user.batches.batch_number}</Badge>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        )}
+      </TableCell>
+      <TableCell><StatusBadge user={user} /></TableCell>
+      <TableCell className="text-sm text-muted-foreground">
+        {formatDate(user.created_at)}
+      </TableCell>
+      <TableCell className="text-sm text-muted-foreground">
+        {formatDate(user.last_login)}
+      </TableCell>
+      <TableCell className="text-right">
+        <div className="flex items-center justify-end gap-2">
+          {!user.is_approved && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-green-600 hover:bg-green-50"
+              onClick={() => onApprove(user, true)}
+              disabled={actionLoading}
+            >
+              {isProcessing ? (
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+              ) : (
+                <UserCheck className="w-4 h-4 mr-1" />
+              )}
+              Approve
+            </Button>
+          )}
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" disabled={isProcessing}>
+                <MoreHorizontal className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => onChangeRole(user)}>
+                <Shield className="w-4 h-4 mr-2" />
+                Change Role
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onToggleActive(user)}>
+                {user.is_active ? (
+                  <>
+                    <XCircle className="w-4 h-4 mr-2" />
+                    Deactivate
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Activate
+                  </>
+                )}
+              </DropdownMenuItem>
+              {user.is_approved && (
+                <DropdownMenuItem 
+                  onClick={() => onApprove(user, false)}
+                  className="text-yellow-600"
+                >
+                  <AlertCircle className="w-4 h-4 mr-2" />
+                  Revoke Approval
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={() => onDelete(user)}
+                className="text-red-600"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete User
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </TableCell>
+    </TableRow>
+  )
+})
+UserRow.displayName = "UserRow"
+
+// Main Component
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState<User[]>([])
+  const [users, setUsers] = useState<UserData[]>([])
   const [loading, setLoading] = useState(true)
   const [pagination, setPagination] = useState<Pagination>({
     page: 1,
@@ -111,17 +367,29 @@ export default function AdminUsersPage() {
   
   // Filters
   const [searchQuery, setSearchQuery] = useState("")
+  const debouncedSearch = useDebounce(searchQuery, 300)
   const [roleFilter, setRoleFilter] = useState("all")
   const [approvalFilter, setApprovalFilter] = useState("all")
   
   // Dialog states
-  const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [selectedUser, setSelectedUser] = useState<UserData | null>(null)
   const [showRoleDialog, setShowRoleDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [newRole, setNewRole] = useState("")
   const [actionLoading, setActionLoading] = useState(false)
+  const [processingUserId, setProcessingUserId] = useState<string | null>(null)
+  
+  // React 18 transition for non-blocking updates
+  const [, startTransition] = useTransition()
   
   const { toast } = useToast()
+
+  // Memoized stats calculations
+  const stats = useMemo(() => ({
+    pending: users.filter(u => !u.is_approved).length,
+    active: users.filter(u => u.is_active && u.is_approved).length,
+    contributors: users.filter(u => u.role === "contributor").length
+  }), [users])
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
@@ -133,14 +401,16 @@ export default function AdminUsersPage() {
       
       if (roleFilter !== "all") params.append("role", roleFilter)
       if (approvalFilter !== "all") params.append("is_approved", approvalFilter)
-      if (searchQuery) params.append("search", searchQuery)
+      if (debouncedSearch) params.append("search", debouncedSearch)
 
       const response = await fetch(`/api/admin/users?${params}`)
       const data = await response.json()
 
       if (data.success) {
-        setUsers(data.users)
-        setPagination(data.pagination)
+        startTransition(() => {
+          setUsers(data.users)
+          setPagination(data.pagination)
+        })
       } else {
         toast({
           title: "Error",
@@ -158,14 +428,22 @@ export default function AdminUsersPage() {
     } finally {
       setLoading(false)
     }
-  }, [pagination.page, pagination.limit, roleFilter, approvalFilter, searchQuery, toast])
+  }, [pagination.page, pagination.limit, roleFilter, approvalFilter, debouncedSearch, toast])
 
   useEffect(() => {
     fetchUsers()
   }, [fetchUsers])
 
-  const handleApprove = async (user: User, approve: boolean) => {
+  // Optimistic update for approve/reject
+  const handleApprove = useCallback(async (user: UserData, approve: boolean) => {
     setActionLoading(true)
+    setProcessingUserId(user.id)
+    
+    // Optimistic update
+    setUsers(prev => prev.map(u => 
+      u.id === user.id ? { ...u, is_approved: approve } : u
+    ))
+    
     try {
       const response = await fetch("/api/admin/users", {
         method: "PUT",
@@ -183,8 +461,11 @@ export default function AdminUsersPage() {
           title: "Success",
           description: `User ${approve ? "approved" : "rejected"} successfully`,
         })
-        fetchUsers()
       } else {
+        // Revert optimistic update
+        setUsers(prev => prev.map(u => 
+          u.id === user.id ? { ...u, is_approved: !approve } : u
+        ))
         toast({
           title: "Error",
           description: data.error || "Failed to update user",
@@ -192,7 +473,10 @@ export default function AdminUsersPage() {
         })
       }
     } catch (error) {
-      console.error("Error updating user:", error)
+      // Revert optimistic update
+      setUsers(prev => prev.map(u => 
+        u.id === user.id ? { ...u, is_approved: !approve } : u
+      ))
       toast({
         title: "Error",
         description: "Failed to update user",
@@ -200,13 +484,21 @@ export default function AdminUsersPage() {
       })
     } finally {
       setActionLoading(false)
+      setProcessingUserId(null)
     }
-  }
+  }, [toast])
 
-  const handleRoleChange = async () => {
+  const handleRoleChange = useCallback(async () => {
     if (!selectedUser || !newRole) return
     
     setActionLoading(true)
+    const oldRole = selectedUser.role
+    
+    // Optimistic update
+    setUsers(prev => prev.map(u => 
+      u.id === selectedUser.id ? { ...u, role: newRole } : u
+    ))
+    
     try {
       const response = await fetch("/api/admin/users", {
         method: "PUT",
@@ -220,15 +512,15 @@ export default function AdminUsersPage() {
       const data = await response.json()
 
       if (data.success) {
-        toast({
-          title: "Success",
-          description: "User role updated successfully",
-        })
+        toast({ title: "Success", description: "User role updated successfully" })
         setShowRoleDialog(false)
         setSelectedUser(null)
         setNewRole("")
-        fetchUsers()
       } else {
+        // Revert
+        setUsers(prev => prev.map(u => 
+          u.id === selectedUser.id ? { ...u, role: oldRole } : u
+        ))
         toast({
           title: "Error",
           description: data.error || "Failed to update role",
@@ -236,7 +528,9 @@ export default function AdminUsersPage() {
         })
       }
     } catch (error) {
-      console.error("Error updating role:", error)
+      setUsers(prev => prev.map(u => 
+        u.id === selectedUser!.id ? { ...u, role: oldRole } : u
+      ))
       toast({
         title: "Error",
         description: "Failed to update role",
@@ -245,17 +539,25 @@ export default function AdminUsersPage() {
     } finally {
       setActionLoading(false)
     }
-  }
+  }, [selectedUser, newRole, toast])
 
-  const handleToggleActive = async (user: User) => {
+  const handleToggleActive = useCallback(async (user: UserData) => {
     setActionLoading(true)
+    setProcessingUserId(user.id)
+    const newActive = !user.is_active
+    
+    // Optimistic update
+    setUsers(prev => prev.map(u => 
+      u.id === user.id ? { ...u, is_active: newActive } : u
+    ))
+    
     try {
       const response = await fetch("/api/admin/users", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: user.id,
-          updates: { is_active: !user.is_active }
+          updates: { is_active: newActive }
         })
       })
 
@@ -264,10 +566,13 @@ export default function AdminUsersPage() {
       if (data.success) {
         toast({
           title: "Success",
-          description: `User ${user.is_active ? "deactivated" : "activated"} successfully`,
+          description: `User ${newActive ? "activated" : "deactivated"} successfully`,
         })
-        fetchUsers()
       } else {
+        // Revert
+        setUsers(prev => prev.map(u => 
+          u.id === user.id ? { ...u, is_active: !newActive } : u
+        ))
         toast({
           title: "Error",
           description: data.error || "Failed to update user",
@@ -275,7 +580,9 @@ export default function AdminUsersPage() {
         })
       }
     } catch (error) {
-      console.error("Error updating user:", error)
+      setUsers(prev => prev.map(u => 
+        u.id === user.id ? { ...u, is_active: !newActive } : u
+      ))
       toast({
         title: "Error",
         description: "Failed to update user",
@@ -283,13 +590,19 @@ export default function AdminUsersPage() {
       })
     } finally {
       setActionLoading(false)
+      setProcessingUserId(null)
     }
-  }
+  }, [toast])
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     if (!selectedUser) return
     
     setActionLoading(true)
+    const deletedUser = selectedUser
+    
+    // Optimistic update
+    setUsers(prev => prev.filter(u => u.id !== selectedUser.id))
+    
     try {
       const response = await fetch(`/api/admin/users?userId=${selectedUser.id}`, {
         method: "DELETE"
@@ -298,14 +611,12 @@ export default function AdminUsersPage() {
       const data = await response.json()
 
       if (data.success) {
-        toast({
-          title: "Success",
-          description: "User deleted successfully",
-        })
+        toast({ title: "Success", description: "User deleted successfully" })
         setShowDeleteDialog(false)
         setSelectedUser(null)
-        fetchUsers()
       } else {
+        // Revert
+        setUsers(prev => [...prev, deletedUser])
         toast({
           title: "Error",
           description: data.error || "Failed to delete user",
@@ -313,7 +624,7 @@ export default function AdminUsersPage() {
         })
       }
     } catch (error) {
-      console.error("Error deleting user:", error)
+      setUsers(prev => [...prev, deletedUser])
       toast({
         title: "Error",
         description: "Failed to delete user",
@@ -322,60 +633,22 @@ export default function AdminUsersPage() {
     } finally {
       setActionLoading(false)
     }
-  }
+  }, [selectedUser, toast])
 
-  const getRoleBadge = (role: string) => {
-    const roleConfig = ROLES.find(r => r.value === role)
-    return (
-      <Badge 
-        variant="secondary" 
-        className={`${roleConfig?.color || "bg-gray-500"} text-white`}
-      >
-        {roleConfig?.label || role}
-      </Badge>
-    )
-  }
+  const openRoleDialog = useCallback((user: UserData) => {
+    setSelectedUser(user)
+    setNewRole(user.role)
+    setShowRoleDialog(true)
+  }, [])
 
-  const getStatusBadge = (user: User) => {
-    if (!user.is_approved) {
-      return (
-        <Badge variant="outline" className="text-yellow-600 border-yellow-600">
-          <Clock className="w-3 h-3 mr-1" />
-          Pending
-        </Badge>
-      )
-    }
-    if (!user.is_active) {
-      return (
-        <Badge variant="outline" className="text-red-600 border-red-600">
-          <XCircle className="w-3 h-3 mr-1" />
-          Inactive
-        </Badge>
-      )
-    }
-    return (
-      <Badge variant="outline" className="text-green-600 border-green-600">
-        <CheckCircle className="w-3 h-3 mr-1" />
-        Active
-      </Badge>
-    )
-  }
+  const openDeleteDialog = useCallback((user: UserData) => {
+    setSelectedUser(user)
+    setShowDeleteDialog(true)
+  }, [])
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return "Never"
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit"
-    })
-  }
-
-  // Stats
-  const pendingCount = users.filter(u => !u.is_approved).length
-  const activeCount = users.filter(u => u.is_active && u.is_approved).length
-  const totalContributors = users.filter(u => u.role === "contributor").length
+  const handlePageChange = useCallback((newPage: number) => {
+    setPagination(p => ({ ...p, page: newPage }))
+  }, [])
 
   return (
     <div className="container mx-auto py-6 space-y-6">
@@ -390,7 +663,7 @@ export default function AdminUsersPage() {
             Manage users, approve registrations, and assign roles
           </p>
         </div>
-        <Button onClick={() => fetchUsers()} variant="outline" disabled={loading}>
+        <Button onClick={fetchUsers} variant="outline" disabled={loading}>
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
           Refresh
         </Button>
@@ -398,42 +671,10 @@ export default function AdminUsersPage() {
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{pagination.total}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Approval</CardTitle>
-            <AlertCircle className="h-4 w-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{pendingCount}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Users</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{activeCount}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Contributors</CardTitle>
-            <User className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{totalContributors}</div>
-          </CardContent>
-        </Card>
+        <StatsCard title="Total Users" value={pagination.total} icon={Users} />
+        <StatsCard title="Pending Approval" value={stats.pending} icon={AlertCircle} color="text-yellow-500" />
+        <StatsCard title="Active Users" value={stats.active} icon={CheckCircle} color="text-green-500" />
+        <StatsCard title="Contributors" value={stats.contributors} icon={User} color="text-blue-500" />
       </div>
 
       {/* Filters */}
@@ -501,12 +742,7 @@ export default function AdminUsersPage() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10">
-                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
-                    Loading users...
-                  </TableCell>
-                </TableRow>
+                Array.from({ length: 5 }).map((_, i) => <TableRowSkeleton key={i} />)
               ) : users.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
@@ -515,130 +751,16 @@ export default function AdminUsersPage() {
                 </TableRow>
               ) : (
                 users.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold">
-                          {user.avatar_url ? (
-                            <img 
-                              src={user.avatar_url} 
-                              alt={user.full_name}
-                              className="w-full h-full rounded-full object-cover"
-                            />
-                          ) : (
-                            user.full_name.charAt(0).toUpperCase()
-                          )}
-                        </div>
-                        <div>
-                          <div className="font-medium">{user.full_name}</div>
-                          <div className="text-sm text-muted-foreground">{user.email}</div>
-                          {user.student_id && (
-                            <div className="text-xs text-muted-foreground">ID: {user.student_id}</div>
-                          )}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>{getRoleBadge(user.role)}</TableCell>
-                    <TableCell>
-                      {user.batches ? (
-                        <Badge variant="outline">
-                          Batch {user.batches.batch_number}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(user)}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatDate(user.created_at)}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {formatDate(user.last_login)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {/* Quick approve/reject buttons for pending users */}
-                        {!user.is_approved && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-green-600 hover:bg-green-50"
-                              onClick={() => handleApprove(user, true)}
-                              disabled={actionLoading}
-                            >
-                              <UserCheck className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-red-600 hover:bg-red-50"
-                              onClick={() => handleApprove(user, false)}
-                              disabled={actionLoading}
-                            >
-                              <UserX className="w-4 h-4" />
-                            </Button>
-                          </>
-                        )}
-                        
-                        {/* More actions dropdown */}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm">
-                              <MoreHorizontal className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => {
-                                setSelectedUser(user)
-                                setNewRole(user.role)
-                                setShowRoleDialog(true)
-                              }}
-                            >
-                              <Shield className="w-4 h-4 mr-2" />
-                              Change Role
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleToggleActive(user)}>
-                              {user.is_active ? (
-                                <>
-                                  <XCircle className="w-4 h-4 mr-2" />
-                                  Deactivate
-                                </>
-                              ) : (
-                                <>
-                                  <CheckCircle className="w-4 h-4 mr-2" />
-                                  Activate
-                                </>
-                              )}
-                            </DropdownMenuItem>
-                            {user.is_approved && (
-                              <DropdownMenuItem 
-                                onClick={() => handleApprove(user, false)}
-                                className="text-yellow-600"
-                              >
-                                <AlertCircle className="w-4 h-4 mr-2" />
-                                Revoke Approval
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem 
-                              onClick={() => {
-                                setSelectedUser(user)
-                                setShowDeleteDialog(true)
-                              }}
-                              className="text-red-600"
-                            >
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Delete User
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  <UserRow
+                    key={user.id}
+                    user={user}
+                    onApprove={handleApprove}
+                    onToggleActive={handleToggleActive}
+                    onChangeRole={openRoleDialog}
+                    onDelete={openDeleteDialog}
+                    actionLoading={actionLoading}
+                    processingUserId={processingUserId}
+                  />
                 ))
               )}
             </TableBody>
@@ -658,8 +780,8 @@ export default function AdminUsersPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setPagination(p => ({ ...p, page: p.page - 1 }))}
-              disabled={pagination.page === 1}
+              onClick={() => handlePageChange(pagination.page - 1)}
+              disabled={pagination.page === 1 || loading}
             >
               <ChevronLeft className="w-4 h-4" />
               Previous
@@ -670,8 +792,8 @@ export default function AdminUsersPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setPagination(p => ({ ...p, page: p.page + 1 }))}
-              disabled={pagination.page === pagination.totalPages}
+              onClick={() => handlePageChange(pagination.page + 1)}
+              disabled={pagination.page === pagination.totalPages || loading}
             >
               Next
               <ChevronRight className="w-4 h-4" />
@@ -711,7 +833,14 @@ export default function AdminUsersPage() {
               Cancel
             </Button>
             <Button onClick={handleRoleChange} disabled={actionLoading || !newRole}>
-              {actionLoading ? "Updating..." : "Update Role"}
+              {actionLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                "Update Role"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -735,7 +864,14 @@ export default function AdminUsersPage() {
               onClick={handleDelete} 
               disabled={actionLoading}
             >
-              {actionLoading ? "Deleting..." : "Delete User"}
+              {actionLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete User"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

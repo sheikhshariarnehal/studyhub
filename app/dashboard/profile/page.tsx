@@ -723,48 +723,62 @@ export default function DashboardProfilePage() {
                   <Calendar className="h-4 w-4" />
                   Batch
                 </Label>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setShowBatchDropdown(!showBatchDropdown)}
-                    className="w-full px-3 py-2 border border-input rounded-md text-left flex items-center justify-between bg-background hover:bg-accent transition-colors"
-                  >
-                    <span className={selectedBatch ? "text-foreground" : "text-muted-foreground"}>
+                <Popover open={showBatchDropdown} onOpenChange={setShowBatchDropdown}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={showBatchDropdown}
+                      className="w-full justify-between font-normal"
+                    >
                       {selectedBatch ? selectedBatch.batch_name : "Select your batch"}
-                    </span>
-                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                  </button>
-
-                  {showBatchDropdown && (
-                    <div className="absolute z-10 w-full mt-1 bg-popover border border-border rounded-md shadow-lg max-h-60 overflow-auto">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setBatchId("")
-                          setShowBatchDropdown(false)
-                        }}
-                        className="w-full px-3 py-2 text-left hover:bg-accent text-muted-foreground"
-                      >
-                        No batch selected
-                      </button>
-                      {batches.map((batch) => (
-                        <button
-                          key={batch.id}
-                          type="button"
-                          onClick={() => {
-                            setBatchId(batch.id)
-                            setShowBatchDropdown(false)
-                          }}
-                          className={`w-full px-3 py-2 text-left hover:bg-accent ${
-                            batchId === batch.id ? "bg-primary/10 text-primary" : ""
-                          }`}
-                        >
-                          {batch.batch_name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[200px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search batch..." />
+                      <CommandList>
+                        <CommandEmpty>No batch found.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="none"
+                            onSelect={() => {
+                              setBatchId("")
+                              setShowBatchDropdown(false)
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                !batchId ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            No batch selected
+                          </CommandItem>
+                          {batches.map((batch) => (
+                            <CommandItem
+                              key={batch.id}
+                              value={batch.batch_name}
+                              onSelect={() => {
+                                setBatchId(batch.id)
+                                setShowBatchDropdown(false)
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  batchId === batch.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {batch.batch_name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
           </CardContent>

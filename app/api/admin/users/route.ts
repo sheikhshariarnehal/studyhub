@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
   try {
     const auth = await verifyAdminAccess(request)
     if (!auth.authorized) {
+      console.error("Unauthorized access attempt:", auth.error)
       return NextResponse.json(
         { success: false, error: auth.error },
         { status: 401 }
@@ -49,34 +50,14 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "20")
     const offset = (page - 1) * limit
 
+    console.log("Fetching users with params:", { role, isApproved, search, page, limit })
+
     const supabase = createClient()
 
-    // Build query
+    // Build query - simplified without the batch join for now
     let query = supabase
       .from("admin_users")
-      .select(`
-        id,
-        full_name,
-        email,
-        role,
-        department,
-        phone,
-        bio,
-        avatar_url,
-        student_id,
-        batch_id,
-        is_active,
-        is_approved,
-        last_login,
-        login_count,
-        created_at,
-        updated_at,
-        batches (
-          id,
-          batch_number,
-          batch_name
-        )
-      `, { count: 'exact' })
+      .select("*", { count: 'exact' })
 
     // Apply filters
     if (role && role !== "all") {
@@ -102,6 +83,27 @@ export async function GET(request: NextRequest) {
         { success: false, error: "Failed to fetch users" },
         { status: 500 }
       )
+    }
+
+    console.log("Successfully fetched users:", users?.length || 0, "Total count:", count)
+
+    // Fetch batch info separately for users that have batch_id
+    if (users && users.length > 0) {
+      const batchIds = users.filter(u => u.batch_id).map(u => u.batch_id)
+      if (batchIds.length > 0) {
+        const { data: batches } = await supabase
+          .from("batches")
+          .select("id, batch_number, batch_name")
+          .in("id", batchIds)
+        
+        // Map batches to users
+        const batchMap = new Map(batches?.map(b => [b.id, b]) || [])
+        users.forEach(user => {
+          if (user.batch_id) {
+            user.batches = batchMap.get(user.batch_id) || null
+          }
+        })
+      }
     }
 
     return NextResponse.json({
@@ -156,7 +158,7 @@ export async function PUT(request: NextRequest) {
     const supabase = createClient()
 
     // Validate allowed update fields
-    const allowedFields = ['is_approved', 'is_active', 'role', 'department', 'phone']
+    const allowedFields = ['is_approved', 'is_active', 'role', 'department', 'phone', 'batch_id', 'department_id']
     const sanitizedUpdates: Record<string, any> = {}
     
     for (const field of allowedFields) {
@@ -174,29 +176,13 @@ export async function PUT(request: NextRequest) {
 
     sanitizedUpdates.updated_at = new Date().toISOString()
 
+    console.log("Updating user:", userId, "with:", sanitizedUpdates)
+
     const { data: updatedUser, error } = await supabase
       .from("admin_users")
       .update(sanitizedUpdates)
       .eq("id", userId)
-      .select(`
-        id,
-        full_name,
-        email,
-        role,
-        department,
-        phone,
-        is_active,
-        is_approved,
-        batch_id,
-        student_id,
-        created_at,
-        updated_at,
-        batches (
-          id,
-          batch_number,
-          batch_name
-        )
-      `)
+      .select("*")
       .single()
 
     if (error) {
@@ -205,6 +191,21 @@ export async function PUT(request: NextRequest) {
         { success: false, error: "Failed to update user" },
         { status: 500 }
       )
+    }
+
+    console.log("User updated successfully:", updatedUser.id)
+
+    // Fetch batch info separately if needed
+    if (updatedUser.batch_id) {
+      const { data: batch } = await supabase
+        .from("batches")
+        .select("id, batch_number, batch_name")
+        .eq("id", updatedUser.batch_id)
+        .single()
+      
+      if (batch) {
+        updatedUser.batches = batch
+      }
     }
 
     return NextResponse.json({

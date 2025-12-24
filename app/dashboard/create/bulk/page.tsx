@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -29,9 +29,25 @@ import {
   TrendingUp,
   BarChart3,
   Layers,
-  ArrowLeft
+  ArrowLeft,
+  Building2,
+  Users,
+  Lock
 } from "lucide-react"
 import Link from "next/link"
+import { DepartmentBatchSelector } from "@/components/dashboard/department-batch-selector"
+
+interface Department {
+  id: string
+  name: string
+  short_name: string
+}
+
+interface Batch {
+  id: string
+  batch_name: string
+  batch_number: number
+}
 
 interface SemesterSummary {
   id: string
@@ -47,6 +63,19 @@ interface SemesterSummary {
   topics_count: number
   materials_count: number
   study_tools_count: number
+  department_id: string | null
+  batch_id: string | null
+  departments?: Department | null
+  batches?: Batch | null
+  canEdit: boolean
+}
+
+interface UserContext {
+  role: string
+  department_id: string | null
+  batch_id: string | null
+  department?: Department | null
+  batch?: Batch | null
 }
 
 type SortField = 'title' | 'section' | 'created_at' | 'updated_at' | 'courses_count'
@@ -61,10 +90,17 @@ export default function DashboardBulkCreatorPage() {
   const [sortField, setSortField] = useState<SortField>('updated_at')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  
+  // Context state
+  const [userContext, setUserContext] = useState<UserContext | null>(null)
+  const [viewDepartmentId, setViewDepartmentId] = useState<string | null>(null)
+  const [viewBatchId, setViewBatchId] = useState<string | null>(null)
+
+  const isContributor = userContext?.role === "contributor"
 
   useEffect(() => {
     loadSemesters()
-  }, [])
+  }, [viewDepartmentId, viewBatchId])
 
   useEffect(() => {
     filterAndSortSemesters()
@@ -73,11 +109,28 @@ export default function DashboardBulkCreatorPage() {
   const loadSemesters = async () => {
     setIsLoading(true)
     try {
-      const response = await fetch('/api/semesters/summary')
+      // Build URL with department/batch filters
+      const params = new URLSearchParams()
+      if (viewDepartmentId) params.set('department_id', viewDepartmentId)
+      if (viewBatchId) params.set('batch_id', viewBatchId)
+      
+      const url = `/api/semesters/summary${params.toString() ? `?${params}` : ''}`
+      const response = await fetch(url)
       
       if (response.ok) {
         const data = await response.json()
         setSemesters(data.semesters || [])
+        
+        // Update user context if provided
+        if (data.userContext) {
+          setUserContext(data.userContext)
+          // Initialize view context with user's assigned dept/batch on first load
+          if (viewDepartmentId === null && viewBatchId === null && data.userContext.department_id) {
+            setViewDepartmentId(data.userContext.department_id)
+            setViewBatchId(data.userContext.batch_id)
+          }
+        }
+        
         toast.success(`Loaded ${data.semesters?.length || 0} semesters`)
       } else {
         toast.error("Failed to load semesters")
@@ -89,6 +142,11 @@ export default function DashboardBulkCreatorPage() {
       setIsLoading(false)
     }
   }
+
+  const handleContextChange = useCallback((departmentId: string | null, batchId: string | null) => {
+    setViewDepartmentId(departmentId)
+    setViewBatchId(batchId)
+  }, [])
 
   const filterAndSortSemesters = () => {
     let filtered = [...semesters]
@@ -200,6 +258,23 @@ export default function DashboardBulkCreatorPage() {
 
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 py-6 max-w-[1600px] mx-auto">
+      {/* Department/Batch Context Selector */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold">Content Management</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            {isContributor 
+              ? "Manage semesters and courses for your department and batch"
+              : "Manage all semesters and courses across the platform"
+            }
+          </p>
+        </div>
+        <DepartmentBatchSelector
+          userContext={userContext}
+          onContextChange={handleContextChange}
+        />
+      </div>
+
       {/* Stats Cards */}
       <div className="flex flex-col gap-5 mb-6">
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
@@ -365,6 +440,7 @@ export default function DashboardBulkCreatorPage() {
                   <TableRow className="bg-muted/50">
                     <TableHead className="font-semibold min-w-[250px]">Semester Info</TableHead>
                     <TableHead className="font-semibold min-w-[100px]">Section</TableHead>
+                    <TableHead className="font-semibold min-w-[120px]">Department/Batch</TableHead>
                     <TableHead className="font-semibold text-center min-w-[200px]">Content</TableHead>
                     <TableHead className="font-semibold text-center min-w-[80px]">Status</TableHead>
                     <TableHead className="font-semibold min-w-[120px]">Last Updated</TableHead>
@@ -379,7 +455,12 @@ export default function DashboardBulkCreatorPage() {
                     >
                       <TableCell>
                         <div className="flex flex-col gap-1">
-                          <span className="font-semibold text-base">{semester.title}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-base">{semester.title}</span>
+                            {!semester.canEdit && isContributor && (
+                              <Lock className="h-3.5 w-3.5 text-muted-foreground" title="Read-only" />
+                            )}
+                          </div>
                           {semester.description && (
                             <span className="text-sm text-muted-foreground line-clamp-1">
                               {semester.description}
@@ -403,6 +484,25 @@ export default function DashboardBulkCreatorPage() {
                         <Badge variant="outline" className="font-mono text-sm">
                           {semester.section}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          {semester.departments && (
+                            <div className="flex items-center gap-1 text-xs">
+                              <Building2 className="h-3 w-3 text-muted-foreground" />
+                              <span>{semester.departments.short_name}</span>
+                            </div>
+                          )}
+                          {semester.batches && (
+                            <div className="flex items-center gap-1 text-xs">
+                              <Users className="h-3 w-3 text-muted-foreground" />
+                              <span>{semester.batches.batch_name}</span>
+                            </div>
+                          )}
+                          {!semester.departments && !semester.batches && (
+                            <span className="text-xs text-muted-foreground">Not assigned</span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-2 items-center">
@@ -430,6 +530,8 @@ export default function DashboardBulkCreatorPage() {
                           size="sm"
                           onClick={() => handleToggleStatus(semester.id, semester.is_active)}
                           className="h-8 w-8 p-0"
+                          disabled={!semester.canEdit}
+                          title={!semester.canEdit ? "Read-only: Cannot modify" : undefined}
                         >
                           {semester.is_active ? (
                             <CheckCircle2 className="h-5 w-5 text-green-600" />
@@ -446,53 +548,67 @@ export default function DashboardBulkCreatorPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => router.push(`/dashboard/create/bulk/edit?id=${semester.id}`)}
-                            className="h-8 w-8 p-0 hover:bg-blue-100 hover:text-blue-600"
-                            title="Edit"
-                          >
-                            <Edit3 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDuplicate(semester.id)}
-                            className="h-8 w-8 p-0 hover:bg-purple-100 hover:text-purple-600"
-                            title="Duplicate"
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
+                          {semester.canEdit ? (
+                            <>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-600"
-                                title="Delete"
+                                onClick={() => router.push(`/dashboard/create/bulk/edit?id=${semester.id}`)}
+                                className="h-8 w-8 p-0 hover:bg-blue-100 hover:text-blue-600"
+                                title="Edit"
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Edit3 className="h-4 w-4" />
                               </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Semester?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This will permanently delete "{semester.title}" and all associated courses, topics, and materials. This action cannot be undone.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={() => handleDelete(semester.id)}
-                                  className="bg-red-600 hover:bg-red-700"
-                                >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDuplicate(semester.id)}
+                                className="h-8 w-8 p-0 hover:bg-purple-100 hover:text-purple-600"
+                                title="Duplicate"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-600"
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Semester?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This will permanently delete "{semester.title}" and all associated courses, topics, and materials. This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDelete(semester.id)}
+                                      className="bg-red-600 hover:bg-red-700"
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => router.push(`/dashboard/create/bulk/edit?id=${semester.id}&readonly=true`)}
+                              className="h-8 w-8 p-0 hover:bg-gray-100"
+                              title="View (Read-only)"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

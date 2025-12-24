@@ -8,7 +8,7 @@ import {
   type Semester,
   type SemesterWithCourses,
 } from "@/lib/api-utils"
-import { getAuthUser, isContributor } from "@/lib/auth-utils"
+import { getAuthUser, isContributor, isAdmin, getContentFilterForUser, canManageContent } from "@/lib/auth-utils"
 
 /**
  * GET /api/semesters
@@ -18,6 +18,8 @@ import { getAuthUser, isContributor } from "@/lib/auth-utils"
  * - include: 'courses' to include related courses
  * - isActive: 'true' or 'false' to filter by active status
  * - search: string to search in title and section
+ * - department_id: filter by department (for context switching)
+ * - batch_id: filter by batch (for context switching)
  * - page: page number (default: 1)
  * - limit: items per page (default: 20, max: 100)
  * - sortBy: field to sort by (default: 'created_at')
@@ -30,14 +32,20 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const params = parseQueryParams(searchParams)
     const includeCourses = searchParams.get('include') === 'courses'
+    
+    // Get viewing context from query params
+    const viewDepartmentId = searchParams.get('department_id') || undefined
+    const viewBatchId = searchParams.get('batch_id') || undefined
 
-    // Build query with optional course inclusion
+    // Build query with optional course inclusion and department/batch info
     let query = supabase
       .from("semesters")
       .select(
         includeCourses
           ? `
             *,
+            departments:department_id (id, name, short_name),
+            batches:batch_id (id, batch_name, batch_number),
             courses!courses_semester_id_fkey(
               id, 
               title, 
@@ -46,16 +54,45 @@ export async function GET(request: NextRequest) {
               description,
               credits,
               is_active, 
-              is_highlighted
+              is_highlighted,
+              department_id,
+              batch_id
             )
           `
-          : '*',
+          : `
+            *,
+            departments:department_id (id, name, short_name),
+            batches:batch_id (id, batch_name, batch_number)
+          `,
         { count: 'exact' }
       )
 
-    // Contributors can only see their own semesters
+    // Apply department/batch filtering for contributors
     if (user && isContributor(user)) {
-      query = query.eq('created_by', user.id)
+      const contentFilter = getContentFilterForUser(user, viewDepartmentId, viewBatchId)
+      
+      // Filter by department if specified
+      if (contentFilter.department_id) {
+        query = query.eq('department_id', contentFilter.department_id)
+      }
+      
+      // Filter by batch if specified
+      if (contentFilter.batch_id) {
+        query = query.eq('batch_id', contentFilter.batch_id)
+      }
+      
+      // Exclude content without department/batch for contributors
+      if (contentFilter.excludeNullDeptBatch) {
+        query = query.not('department_id', 'is', null).not('batch_id', 'is', null)
+      }
+    } else {
+      // For admins, allow optional filtering but don't require it
+      if (viewDepartmentId) {
+        query = query.eq('department_id', viewDepartmentId)
+      }
+      if (viewBatchId) {
+        query = query.eq('batch_id', viewBatchId)
+      }
     }
 
     // Apply filters
@@ -80,7 +117,13 @@ export async function GET(request: NextRequest) {
       return errorResponse(error.message, 500)
     }
 
-    return successResponse(data as (Semester | SemesterWithCourses)[], undefined, {
+    // Add canEdit flag for each semester
+    const semestersWithPermissions = (data || []).map(semester => ({
+      ...semester,
+      canEdit: user ? (isAdmin(user) || canManageContent(user, semester.department_id, semester.batch_id)) : false,
+    }))
+
+    return successResponse(semestersWithPermissions as (Semester | SemesterWithCourses)[], undefined, {
       total: count || 0,
       page: params.page,
       limit: params.limit,
@@ -105,6 +148,8 @@ export async function GET(request: NextRequest) {
  * - end_date: date string
  * - default_credits: number (default: 3)
  * - is_active: boolean (default: true)
+ * - department_id: uuid (auto-assigned for contributors)
+ * - batch_id: uuid (auto-assigned for contributors)
  */
 export async function POST(request: NextRequest) {
   return withErrorHandler(async () => {
@@ -120,6 +165,13 @@ export async function POST(request: NextRequest) {
     // Check if contributor is approved
     if (isContributor(user) && !user.is_approved) {
       return errorResponse("Your account is pending approval", 403)
+    }
+
+    // Contributors must have department and batch assigned
+    if (isContributor(user)) {
+      if (!user.department_id || !user.batch_id) {
+        return errorResponse("Your profile must have a department and batch assigned before creating content", 403)
+      }
     }
 
     // Validate required fields
@@ -147,6 +199,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Determine department_id and batch_id
+    // For contributors: always use their assigned values
+    // For admins: use provided values or null
+    const departmentId = isContributor(user) ? user.department_id : (body.department_id || null)
+    const batchId = isContributor(user) ? user.batch_id : (body.batch_id || null)
+
     const { data, error } = await supabase
       .from("semesters")
       .insert({
@@ -159,9 +217,15 @@ export async function POST(request: NextRequest) {
         end_date: body.end_date || null,
         default_credits: body.default_credits || 3,
         is_active: body.is_active ?? true,
-        created_by: user.id,  // Track who created this semester
+        created_by: user.id,
+        department_id: departmentId,
+        batch_id: batchId,
       })
-      .select()
+      .select(`
+        *,
+        departments:department_id (id, name, short_name),
+        batches:batch_id (id, batch_name, batch_number)
+      `)
       .single()
 
     if (error) {

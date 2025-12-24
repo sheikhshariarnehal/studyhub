@@ -1,22 +1,54 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
-import { getAuthUser, isContributor } from "@/lib/auth-utils"
+import { getAuthUser, isContributor, isAdmin, getContentFilterForUser, canManageContent } from "@/lib/auth-utils"
 
 export async function GET(request: NextRequest) {
   try {
     // Get authenticated user
     const user = await getAuthUser(request)
+    const { searchParams } = new URL(request.url)
+    
+    // Get viewing context from query params
+    const viewDepartmentId = searchParams.get('department_id') || undefined
+    const viewBatchId = searchParams.get('batch_id') || undefined
 
-    // Build query for semesters
+    // Build query for semesters with department/batch info
     let query = supabase
       .from("semesters")
-      .select("*")
+      .select(`
+        *,
+        departments:department_id (id, name, short_name),
+        batches:batch_id (id, batch_name, batch_number)
+      `)
       .order("is_active", { ascending: false })
       .order("created_at", { ascending: false })
 
-    // Contributors can only see their own semesters
+    // Apply department/batch filtering for contributors
     if (user && isContributor(user)) {
-      query = query.eq("created_by", user.id)
+      const contentFilter = getContentFilterForUser(user, viewDepartmentId, viewBatchId)
+      
+      // Filter by department if specified
+      if (contentFilter.department_id) {
+        query = query.eq('department_id', contentFilter.department_id)
+      }
+      
+      // Filter by batch if specified
+      if (contentFilter.batch_id) {
+        query = query.eq('batch_id', contentFilter.batch_id)
+      }
+      
+      // Exclude content without department/batch for contributors
+      if (contentFilter.excludeNullDeptBatch) {
+        query = query.not('department_id', 'is', null).not('batch_id', 'is', null)
+      }
+    } else {
+      // For admins, allow optional filtering but don't require it
+      if (viewDepartmentId) {
+        query = query.eq('department_id', viewDepartmentId)
+      }
+      if (viewBatchId) {
+        query = query.eq('batch_id', viewBatchId)
+      }
     }
 
     const { data: semesters, error: semestersError } = await query
@@ -86,12 +118,16 @@ export async function GET(request: NextRequest) {
           studyToolsCount = stCount || 0
         }
 
+        // Add canEdit permission flag
+        const canEdit = user ? (isAdmin(user) || canManageContent(user, semester.department_id, semester.batch_id)) : false
+
         return {
           ...semester,
           courses_count: coursesCount || 0,
           topics_count: topicsCount,
           materials_count: slidesCount + videosCount,
-          study_tools_count: studyToolsCount
+          study_tools_count: studyToolsCount,
+          canEdit,
         }
       })
     )
@@ -100,7 +136,15 @@ export async function GET(request: NextRequest) {
       semesters: semestersWithCounts,
       total: semestersWithCounts.length,
       active: semestersWithCounts.filter(s => s.is_active).length,
-      inactive: semestersWithCounts.filter(s => !s.is_active).length
+      inactive: semestersWithCounts.filter(s => !s.is_active).length,
+      // Include user context for UI
+      userContext: user ? {
+        role: user.role,
+        department_id: user.department_id,
+        batch_id: user.batch_id,
+        department: user.department,
+        batch: user.batch,
+      } : null,
     })
   } catch (error) {
     console.error("Error in /api/semesters/summary:", error)

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createDB } from "@/lib/supabase"
-import { getAuthUser, isContributor } from "@/lib/auth-utils"
+import { getAuthUser, isContributor, isAdmin } from "@/lib/auth-utils"
 
 interface SemesterData {
   title: string
@@ -11,6 +11,7 @@ interface SemesterData {
   start_date?: string
   end_date?: string
   credits?: number
+  is_active?: boolean
 }
 
 interface CourseData {
@@ -51,7 +52,10 @@ export async function POST(request: NextRequest) {
     // Get authenticated user
     const user = await getAuthUser(request)
     
+    console.log("[all-in-one] Authentication result:", user ? `User: ${user.email} (${user.role})` : "No user")
+    
     if (!user) {
+      console.log("[all-in-one] Returning 401 - No authenticated user")
       return NextResponse.json(
         { error: "Unauthorized - Please login" },
         { status: 401 }
@@ -60,11 +64,23 @@ export async function POST(request: NextRequest) {
 
     // Check if user is approved (for contributors)
     if (isContributor(user) && !user.is_approved) {
+      console.log("[all-in-one] Returning 403 - User not approved")
       return NextResponse.json(
         { error: "Your account is pending approval" },
         { status: 403 }
       )
     }
+
+    // Contributors must have department and batch assigned
+    if (isContributor(user) && (!user.department_id || !user.batch_id)) {
+      console.log("[all-in-one] Returning 403 - User missing department/batch")
+      return NextResponse.json(
+        { error: "Your account must be assigned to a department and batch before creating content" },
+        { status: 403 }
+      )
+    }
+
+    console.log("[all-in-one] User authenticated successfully, processing request...")
 
     const data: AllInOneData = await request.json()
     const db = createDB()
@@ -94,15 +110,35 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Determine department_id and batch_id for the content
+    // Contributors use their assigned department/batch
+    // Admins can optionally specify, or leave null for global content
+    const contentDepartmentId = isContributor(user) ? user.department_id : null
+    const contentBatchId = isContributor(user) ? user.batch_id : null
+
     // Start transaction-like operations
     // Create semester first
-    const semesterInsertData = {
+    const semesterInsertData: Record<string, unknown> = {
       title: data.semester.title,
-      description: data.semester.description,
+      description: data.semester.description || null,
       section: data.semester.section,
-      has_midterm: data.semester.has_midterm,
-      has_final: data.semester.has_final,
-      created_by: user.id
+      has_midterm: data.semester.has_midterm ?? true,
+      has_final: data.semester.has_final ?? true,
+      is_active: data.semester.is_active ?? true,
+      created_by: user.id,
+      department_id: contentDepartmentId,
+      batch_id: contentBatchId,
+    }
+
+    // Add optional date fields if provided
+    if (data.semester.start_date) {
+      semesterInsertData.start_date = data.semester.start_date
+    }
+    if (data.semester.end_date) {
+      semesterInsertData.end_date = data.semester.end_date
+    }
+    if (data.semester.credits) {
+      semesterInsertData.default_credits = data.semester.credits
     }
 
     const { data: semesterData, error: semesterError } = await db
@@ -112,6 +148,24 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (semesterError) {
+      console.error("[all-in-one] Semester creation error:", semesterError)
+      
+      // Check for duplicate key constraint violation
+      if (semesterError.code === '23505') {
+        const isDeptBatchScope = contentDepartmentId && contentBatchId
+        const scopeMsg = isDeptBatchScope 
+          ? ` for your department and batch`
+          : ``
+        
+        return NextResponse.json(
+          { 
+            error: `A semester with title "${data.semester.title}" and section "${data.semester.section}" already exists${scopeMsg}. Please use a different title or section.`,
+            code: 'DUPLICATE_SEMESTER'
+          },
+          { status: 409 }
+        )
+      }
+      
       return NextResponse.json(
         { error: `Failed to create semester: ${semesterError.message}` },
         { status: 500 }
@@ -133,7 +187,9 @@ export async function POST(request: NextRequest) {
           description: course.description || null,
           is_highlighted: course.is_highlighted || false,
           semester_id: semesterData.id,
-          created_by: user.id
+          created_by: user.id,
+          department_id: contentDepartmentId,
+          batch_id: contentBatchId,
         }
 
         const { data: courseData, error: courseError } = await db
@@ -159,7 +215,9 @@ export async function POST(request: NextRequest) {
               description: topic.description || "",
               course_id: courseData.id,
               order_index: topic.order_index || topicIndex + 1,
-              created_by: user.id
+              created_by: user.id,
+              department_id: contentDepartmentId,
+              batch_id: contentBatchId,
             }])
             .select()
             .single()
@@ -175,7 +233,9 @@ export async function POST(request: NextRequest) {
                 google_drive_url: slide.url,
                 topic_id: topicData.id,
                 order_index: slideIndex + 1,
-                created_by: user.id
+                created_by: user.id,
+                department_id: contentDepartmentId,
+                batch_id: contentBatchId,
               }])
             )
 
@@ -188,7 +248,9 @@ export async function POST(request: NextRequest) {
                 youtube_url: video.url,
                 topic_id: topicData.id,
                 order_index: videoIndex + 1,
-                created_by: user.id
+                created_by: user.id,
+                department_id: contentDepartmentId,
+                batch_id: contentBatchId,
               }])
             )
 
@@ -208,13 +270,15 @@ export async function POST(request: NextRequest) {
           .map(tool => 
             (async () => {
               // Try inserting with description first
-              const toolData: any = {
+              const toolData: Record<string, unknown> = {
                 title: tool.title,
                 type: tool.type,
                 content_url: tool.content_url || null,
                 course_id: courseData.id,
                 exam_type: tool.exam_type || "both",
-                created_by: user.id
+                created_by: user.id,
+                department_id: contentDepartmentId,
+                batch_id: contentBatchId,
               }
 
               // Only add description if it has a value

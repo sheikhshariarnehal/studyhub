@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Separator } from "@/components/ui/separator"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { toast } from "sonner"
 import { generateDemoSemester } from "@/utils/semester-demo-data"
 import {
@@ -49,8 +50,23 @@ import {
   ChevronUp,
   Sparkles,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Building2,
+  Users,
+  Info
 } from "lucide-react"
+
+// User context interface
+interface UserContext {
+  id: string
+  role: string
+  full_name: string
+  department_id: string | null
+  batch_id: string | null
+  department?: { id: string; name: string; short_name: string } | null
+  batch?: { id: string; batch_name: string; batch_number: number } | null
+  is_approved: boolean
+}
 
 // Interfaces
 interface SemesterData {
@@ -494,6 +510,8 @@ function SortableTopic({
 export default function CreateBulkCreatorPage() {
   const router = useRouter()
   const [isCreating, setIsCreating] = useState(false)
+  const [isLoadingUser, setIsLoadingUser] = useState(true)
+  const [userContext, setUserContext] = useState<UserContext | null>(null)
   const [expandedCourse, setExpandedCourse] = useState<number | null>(null)
   const [expandedTopic, setExpandedTopic] = useState<{ courseIndex: number; topicIndex: number } | null>(null)
   const [expandedStudyTool, setExpandedStudyTool] = useState<{ courseIndex: number; toolIndex: number } | null>(null)
@@ -511,6 +529,42 @@ export default function CreateBulkCreatorPage() {
     },
     courses: []
   })
+
+  // Check if user is a contributor
+  const isContributor = userContext?.role === "contributor"
+  const isAdmin = ["super_admin", "admin", "moderator", "content_creator", "section_admin"].includes(userContext?.role || "")
+  
+  // Check if contributor has required context
+  const contributorHasContext = isContributor && userContext?.department_id && userContext?.batch_id
+  const contributorMissingContext = isContributor && (!userContext?.department_id || !userContext?.batch_id)
+  const contributorNotApproved = isContributor && !userContext?.is_approved
+
+  // Fetch user profile on mount
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const response = await fetch("/api/user/profile", {
+          credentials: "include",
+        })
+        const data = await response.json()
+        if (data.success && data.user) {
+          // Map API response to UserContext format
+          setUserContext({
+            ...data.user,
+            department: data.user.departments, // API returns 'departments', we need 'department'
+            batch: data.user.batches, // API returns 'batches', we need 'batch'
+          })
+        }
+      } catch (error) {
+        console.error("Error fetching user profile:", error)
+        toast.error("Failed to load user profile")
+      } finally {
+        setIsLoadingUser(false)
+      }
+    }
+
+    fetchUserProfile()
+  }, [])
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -847,8 +901,23 @@ export default function CreateBulkCreatorPage() {
     return true
   }
 
+  // Check if form can be submitted
+  const canSubmit = !isLoadingUser && !contributorNotApproved && !contributorMissingContext
+
   // Submit
   const handleSubmit = async () => {
+    if (!canSubmit) {
+      if (contributorNotApproved) {
+        toast.error("Your account is pending approval")
+        return
+      }
+      if (contributorMissingContext) {
+        toast.error("Your account must be assigned to a department and batch")
+        return
+      }
+      return
+    }
+    
     if (!validateForm()) return
 
     setIsCreating(true)
@@ -856,7 +925,8 @@ export default function CreateBulkCreatorPage() {
       const response = await fetch('/api/admin/all-in-one', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(formData),
+        credentials: 'include'
       })
 
       if (!response.ok) {
@@ -876,93 +946,171 @@ export default function CreateBulkCreatorPage() {
   }
 
   return (
-    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 max-w-[1600px] mx-auto">
+    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div className="flex-1">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push('/dashboard/create/bulk')}
-              className="h-8 w-fit"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back
-            </Button>
-            <Separator orientation="vertical" className="h-6 hidden sm:block" />
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              Create New Semester
-            </h1>
+      <div className="mb-6">
+        <div className="flex items-center gap-4 mb-6">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => router.push('/dashboard/create/bulk')}
+            className="h-10 w-10 rounded-lg"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          
+          <div className="flex-1">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 text-white">
+                <Plus className="h-5 w-5" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight">
+                  Create New Semester
+                </h1>
+                <p className="text-sm text-muted-foreground">
+                  Build a complete semester with courses, topics, materials, and study tools
+                </p>
+              </div>
+            </div>
           </div>
-          <p className="text-sm text-muted-foreground sm:ml-20">
-            Build a complete semester with courses, topics, materials, and study tools
-          </p>
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={loadDemoData}
+                  variant="outline"
+                  size="sm"
+                  className="h-9"
+                  disabled={contributorNotApproved || contributorMissingContext}
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Load Demo
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-sm">Load sample data to see how it works</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                onClick={loadDemoData}
-                variant="outline"
-                size="default"
-                className="border-purple-300 text-purple-600 hover:bg-purple-50 w-full sm:w-auto"
-              >
-                <Sparkles className="h-4 w-4 mr-2" />
-                Load Demo
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p className="text-sm">Load sample data to see how it works</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
       </div>
+
+      {/* Loading State */}
+      {isLoadingUser && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        </div>
+      )}
+
+      {/* Contributor Context Banner */}
+      {!isLoadingUser && isContributor && (
+        <div className="mb-6 space-y-4">
+          {/* Show department/batch context */}
+          {contributorHasContext && (
+            <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800">
+              <Info className="h-4 w-4 text-blue-600" />
+              <AlertTitle className="text-blue-900 dark:text-blue-100">Creating content for your section</AlertTitle>
+              <AlertDescription className="text-blue-700 dark:text-blue-300">
+                <div className="flex items-center gap-4 mt-2">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4" />
+                    <span className="font-medium">{userContext?.department?.short_name || userContext?.department?.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    <span className="font-medium">{userContext?.batch?.batch_name}</span>
+                  </div>
+                </div>
+                <p className="mt-2 text-sm">
+                  All content you create will be associated with your department and batch.
+                </p>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Warning: Missing department/batch */}
+          {contributorMissingContext && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Setup Required</AlertTitle>
+              <AlertDescription>
+                Your account is not yet assigned to a department and batch. Please contact an administrator to complete your account setup before creating content.
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Warning: Not approved */}
+          {contributorNotApproved && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Account Pending Approval</AlertTitle>
+              <AlertDescription>
+                Your account is pending approval. You will be able to create content once an administrator approves your account.
+              </AlertDescription>
+            </Alert>
+          )}
+        </div>
+      )}
+
+      {/* Admin Info Banner */}
+      {!isLoadingUser && isAdmin && (
+        <Alert className="mb-6 border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-800">
+          <CheckCircle className="h-4 w-4 text-green-600" />
+          <AlertTitle className="text-green-900 dark:text-green-100">Admin Access</AlertTitle>
+          <AlertDescription className="text-green-700 dark:text-green-300">
+            As an admin, you can create content that is available globally across all departments and batches.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="space-y-6">
         {/* Semester Info */}
-        <Card className="border-t-4 border-t-blue-500 shadow-md">
+        <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-blue-600" />
-              Semester Information
-            </CardTitle>
-            <CardDescription>Basic details about the semester</CardDescription>
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                <BookOpen className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div>
+                <CardTitle className="text-lg">Semester Information</CardTitle>
+                <CardDescription>Basic details about the semester</CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4 sm:space-y-6">
-            <div className="grid gap-4 sm:gap-6 sm:grid-cols-2">
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label className="text-sm font-semibold flex items-center gap-2">
+                <Label className="text-sm font-medium">
                   Semester Title <span className="text-red-500">*</span>
                 </Label>
                 <Input
-                  placeholder="e.g., Fall 2024"
+                  placeholder="e.g., Fall 2025"
                   value={formData.semester.title}
                   onChange={(e) => setFormData(prev => ({
                     ...prev,
                     semester: { ...prev.semester, title: e.target.value }
                   }))}
-                  className="h-11"
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-sm font-semibold flex items-center gap-2">
+                <Label className="text-sm font-medium">
                   Section <span className="text-red-500">*</span>
                 </Label>
                 <Input
-                  placeholder="e.g., A, B, C"
+                  placeholder="e.g., 63 G"
                   value={formData.semester.section}
                   onChange={(e) => setFormData(prev => ({
                     ...prev,
                     semester: { ...prev.semester, section: e.target.value }
                   }))}
-                  className="h-11"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-semibold">Description</Label>
+              <Label className="text-sm font-medium">Description</Label>
               <Textarea
                 placeholder="Describe the semester..."
                 value={formData.semester.description}
@@ -975,9 +1123,9 @@ export default function CreateBulkCreatorPage() {
               />
             </div>
 
-            <div className="grid gap-4 sm:gap-6 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
-                <Label className="text-sm font-semibold">Start Date</Label>
+                <Label className="text-sm font-medium">Start Date</Label>
                 <Input
                   type="date"
                   value={formData.semester.start_date}
@@ -985,11 +1133,10 @@ export default function CreateBulkCreatorPage() {
                     ...prev,
                     semester: { ...prev.semester, start_date: e.target.value }
                   }))}
-                  className="h-11"
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-sm font-semibold">End Date</Label>
+                <Label className="text-sm font-medium">End Date</Label>
                 <Input
                   type="date"
                   value={formData.semester.end_date}
@@ -997,11 +1144,10 @@ export default function CreateBulkCreatorPage() {
                     ...prev,
                     semester: { ...prev.semester, end_date: e.target.value }
                   }))}
-                  className="h-11"
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-sm font-semibold">Default Credits</Label>
+                <Label className="text-sm font-medium">Default Credits</Label>
                 <Input
                   type="number"
                   min="1"
@@ -1011,12 +1157,13 @@ export default function CreateBulkCreatorPage() {
                     ...prev,
                     semester: { ...prev.semester, default_credits: parseInt(e.target.value) || 3 }
                   }))}
-                  className="h-11"
                 />
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 pt-4">
+            <Separator />
+
+            <div className="flex flex-wrap gap-6">
               <div className="flex items-center gap-3">
                 <Switch
                   checked={formData.semester.has_midterm}
@@ -1025,7 +1172,7 @@ export default function CreateBulkCreatorPage() {
                     semester: { ...prev.semester, has_midterm: checked }
                   }))}
                 />
-                <Label className="text-sm font-medium cursor-pointer">Has Midterm Exam</Label>
+                <Label className="text-sm cursor-pointer">Has Midterm Exam</Label>
               </div>
               <div className="flex items-center gap-3">
                 <Switch
@@ -1035,7 +1182,7 @@ export default function CreateBulkCreatorPage() {
                     semester: { ...prev.semester, has_final: checked }
                   }))}
                 />
-                <Label className="text-sm font-medium cursor-pointer">Has Final Exam</Label>
+                <Label className="text-sm cursor-pointer">Has Final Exam</Label>
               </div>
               <div className="flex items-center gap-3">
                 <Switch
@@ -1045,24 +1192,29 @@ export default function CreateBulkCreatorPage() {
                     semester: { ...prev.semester, is_active: checked }
                   }))}
                 />
-                <Label className="text-sm font-medium cursor-pointer">Set as Active</Label>
+                <Label className="text-sm cursor-pointer">Set as Active</Label>
               </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Courses Section */}
-        <Card className="border-t-4 border-t-purple-500 shadow-md">
+        <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2">
-                  <BookOpen className="h-5 w-5 text-purple-600" />
-                  Courses ({formData.courses.length})
-                </CardTitle>
-                <CardDescription>Add courses with topics and materials</CardDescription>
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
+                  <BookOpen className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    Courses
+                    <Badge variant="secondary">{formData.courses.length}</Badge>
+                  </CardTitle>
+                  <CardDescription>Add courses with topics and materials</CardDescription>
+                </div>
               </div>
-              <Button onClick={addCourse} className="bg-gradient-to-r from-purple-600 to-blue-600">
+              <Button onClick={addCourse} size="sm" className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
                 <Plus className="h-4 w-4 mr-2" />
                 Add Course
               </Button>
@@ -1071,50 +1223,50 @@ export default function CreateBulkCreatorPage() {
           <CardContent>
             {formData.courses.length === 0 ? (
               <div className="text-center py-12 border-2 border-dashed rounded-lg">
-                <BookOpen className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-30" />
+                <div className="w-16 h-16 mx-auto mb-4 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                  <BookOpen className="h-8 w-8 text-purple-400" />
+                </div>
                 <p className="text-muted-foreground mb-4">No courses added yet</p>
-                <Button onClick={addCourse} variant="outline">
+                <Button onClick={addCourse} size="sm" className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Your First Course
                 </Button>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {formData.courses.map((course, courseIndex) => (
-                  <Card key={courseIndex} className="border-l-4 border-l-purple-400 shadow-sm">
+                  <Card key={courseIndex}>
                     <CardHeader className="pb-3">
                       <div 
-                        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 cursor-pointer hover:bg-accent/50 -m-2 p-2 rounded-md transition-colors"
+                        className="flex items-center justify-between gap-3 cursor-pointer"
                         onClick={() => setExpandedCourse(expandedCourse === courseIndex ? null : courseIndex)}
                       >
-                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-1">
-                          <Badge className="bg-purple-600">Course {courseIndex + 1}</Badge>
-                          <span className="font-semibold text-base sm:text-lg">
+                        <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+                          <Badge variant="secondary" className="shrink-0">Course {courseIndex + 1}</Badge>
+                          <span className="font-semibold truncate">
                             {course.title || "Untitled Course"}
                           </span>
                           {course.course_code && (
-                            <Badge variant="outline" className="font-mono text-xs">
+                            <Badge variant="outline" className="font-mono text-xs shrink-0">
                               {course.course_code}
                             </Badge>
                           )}
                           {course.is_highlighted && (
-                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 shrink-0" />
                           )}
-                          <div className="flex gap-2 sm:gap-3 text-xs text-muted-foreground">
+                          <div className="flex gap-2 text-xs text-muted-foreground ml-auto">
                             <span className="flex items-center gap-1">
                               <FileText className="h-3 w-3" />
-                              {course.topics.length} topics
+                              {course.topics.length}
                             </span>
                             <span className="flex items-center gap-1">
                               <ClipboardList className="h-3 w-3" />
-                              {course.studyTools.length} tools
+                              {course.studyTools.length}
                             </span>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                          <div className="p-1">
-                            {expandedCourse === courseIndex ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                          </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {expandedCourse === courseIndex ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1122,7 +1274,7 @@ export default function CreateBulkCreatorPage() {
                               e.stopPropagation()
                               removeCourse(courseIndex)
                             }}
-                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/30"
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -1373,40 +1525,38 @@ export default function CreateBulkCreatorPage() {
         </Card>
 
         {/* Action Buttons */}
-        <Card className="shadow-lg border-t-4 border-t-green-500">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
+        <Card className="sticky bottom-4 shadow-lg">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-4">
               <Button
-                variant="outline"
-                size="lg"
+                variant="ghost"
                 onClick={() => router.push('/dashboard/create/bulk')}
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Cancel
               </Button>
-              <div className="flex gap-3">
+              <div className="flex items-center gap-3">
                 {formData.courses.length > 0 && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground px-4 py-2 bg-blue-50 rounded-md">
-                    <CheckCircle className="h-4 w-4 text-blue-600" />
+                  <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
                     <span>
                       {formData.courses.length} course{formData.courses.length !== 1 ? 's' : ''} ready
                     </span>
                   </div>
                 )}
                 <Button
-                  size="lg"
                   onClick={handleSubmit}
-                  disabled={isCreating || !formData.semester.title || !formData.semester.section || formData.courses.length === 0}
-                  className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 shadow-lg px-8"
+                  disabled={isCreating || !canSubmit || !formData.semester.title || !formData.semester.section || formData.courses.length === 0}
+                  className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700"
                 >
                   {isCreating ? (
                     <>
-                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       Creating...
                     </>
                   ) : (
                     <>
-                      <Save className="h-5 w-5 mr-2" />
+                      <Save className="h-4 w-4 mr-2" />
                       Create Semester
                     </>
                   )}

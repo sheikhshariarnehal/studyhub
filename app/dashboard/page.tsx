@@ -22,6 +22,9 @@ import {
   Zap,
   AlertTriangle,
   ExternalLink,
+  Building2,
+  Users,
+  Info,
 } from "lucide-react"
 
 interface UserProfile {
@@ -33,13 +36,21 @@ interface UserProfile {
   bio?: string
   phone?: string
   department?: string
+  department_id?: string
+  batch_id?: string
   student_id?: string
   social_links?: Record<string, string>
   is_approved: boolean
   created_at: string
   batches?: {
+    id: string
     batch_name: string
     batch_number: number
+  }
+  departments?: {
+    id: string
+    name: string
+    short_name: string
   }
 }
 
@@ -188,6 +199,44 @@ export default function DashboardPage() {
                 Complete Profile
               </Link>
             </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Contributor Context Info */}
+      {user && user.role === "contributor" && user.is_approved && (
+        <Card className="border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800">
+          <CardContent className="flex items-start gap-4 py-4">
+            <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-semibold text-blue-800 dark:text-blue-200">
+                Your Content Scope
+              </h3>
+              <div className="flex flex-wrap items-center gap-4 mt-2">
+                {user.departments && (
+                  <div className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
+                    <Building2 className="h-4 w-4" />
+                    <span className="font-medium">{user.departments.short_name || user.departments.name}</span>
+                  </div>
+                )}
+                {user.batches && (
+                  <div className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
+                    <Users className="h-4 w-4" />
+                    <span className="font-medium">{user.batches.batch_name}</span>
+                  </div>
+                )}
+                {!user.departments && !user.batches && (
+                  <p className="text-sm text-blue-600 dark:text-blue-400">
+                    Contact admin to assign you to a department and batch
+                  </p>
+                )}
+              </div>
+              {user.departments && user.batches && (
+                <p className="text-sm text-blue-600 dark:text-blue-400 mt-2">
+                  Content you create will be available to students in your department and batch.
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
