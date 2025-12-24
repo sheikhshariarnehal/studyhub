@@ -152,7 +152,7 @@ const ProgressStats = memo(function ProgressStats({
   }, [formData])
 
   return (
-    <div className={cn("grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3", className)}>
+    <div className={cn("grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3", className)}>
       <StatCard 
         icon={BookOpen} 
         label="Courses" 
@@ -265,7 +265,7 @@ const StatCard = memo(function StatCard({
 const PageSkeleton = memo(function PageSkeleton() {
   return (
     <div className="min-h-screen">
-      <div className="w-full max-w-[1200px] mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
+      <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
         {/* Header Skeleton */}
         <div className="flex items-center gap-4 bg-white dark:bg-slate-800/60 rounded-xl p-4 sm:p-6 border border-slate-200 dark:border-slate-700/50">
           <Skeleton className="h-10 w-10 rounded-lg" />
@@ -288,8 +288,8 @@ const PageSkeleton = memo(function PageSkeleton() {
           <CardHeader className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700/50">
             <Skeleton className="h-6 w-48" />
           </CardHeader>
-          <CardContent className="space-y-4 p-6">
-            <div className="grid gap-4 sm:grid-cols-2">
+          <CardContent className="space-y-4 p-4">
+            <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
               <Skeleton className="h-10" />
               <Skeleton className="h-10" />
             </div>
@@ -496,7 +496,7 @@ const StudyToolCard = memo(function StudyToolCard({ tool, toolIndex, courseIndex
         <CardContent className="space-y-4 pt-0 animate-in slide-in-from-top-2 duration-200">
           <Separator className="bg-gradient-to-r from-transparent via-border to-transparent" />
           
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
             <div className={`space-y-2 ${isSyllabus ? 'sm:col-span-2' : ''}`}>
               <Label className="text-sm font-semibold flex items-center gap-1.5">
                 <FileText className="h-3.5 w-3.5 text-muted-foreground" />
@@ -741,12 +741,12 @@ const SortableTopic = memo(function SortableTopic({ topic, topicIndex, courseInd
       </CardHeader>
       
       {isExpanded && (
-        <CardContent className="space-y-5 px-4 pb-5 animate-in slide-in-from-top-2 duration-200">
+        <CardContent className="space-y-4 px-3 pb-4 animate-in slide-in-from-top-2 duration-200">
           <Separator className="bg-gradient-to-r from-transparent via-slate-200 dark:via-slate-700 to-transparent" />
           
           {/* Topic Details */}
-          <div className="bg-slate-50 dark:bg-slate-800/30 rounded-xl p-3 sm:p-4 space-y-3 sm:space-y-4 border border-slate-200 dark:border-slate-700">
-            <div className="grid gap-3 sm:gap-4 sm:grid-cols-2">
+          <div className="bg-slate-50 dark:bg-slate-800/30 rounded-lg p-3 space-y-3 border border-slate-200 dark:border-slate-700">
+            <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label className="text-xs sm:text-sm font-medium flex items-center gap-2 text-slate-700 dark:text-slate-300">
                   <FileText className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
@@ -824,7 +824,7 @@ const SortableTopic = memo(function SortableTopic({ topic, topicIndex, courseInd
                 {topic.slides.map((slide: any, slideIndex: number) => (
                   <div 
                     key={slideIndex} 
-                    className="grid gap-3 p-4 border border-blue-200 dark:border-blue-800/50 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 group hover:shadow-sm transition-all duration-150"
+                    className="grid gap-2 p-3 border border-blue-200 dark:border-blue-800/50 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 group hover:shadow-sm transition-all duration-150"
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <Badge variant="outline" className="text-xs bg-white dark:bg-slate-800/50 border-blue-200 dark:border-blue-800/50 text-blue-600 dark:text-blue-300">
@@ -924,7 +924,7 @@ const SortableTopic = memo(function SortableTopic({ topic, topicIndex, courseInd
                 {topic.videos.map((video: any, videoIndex: number) => (
                   <div 
                     key={videoIndex} 
-                    className="grid gap-3 p-4 border border-purple-200 dark:border-purple-800/50 rounded-xl bg-purple-50/50 dark:bg-purple-950/20 group hover:shadow-sm transition-all duration-150"
+                    className="grid gap-2 p-3 border border-purple-200 dark:border-purple-800/50 rounded-lg bg-purple-50/50 dark:bg-purple-950/20 group hover:shadow-sm transition-all duration-150"
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <Badge variant="outline" className="text-xs bg-white dark:bg-slate-800/50 border-purple-200 dark:border-purple-800/50 text-purple-600 dark:text-purple-300">
@@ -1269,21 +1269,21 @@ function EditPageContent() {
   return (
     <TooltipProvider>
       <div className="min-h-screen">
-        <div className="w-full max-w-[1200px] mx-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
+        <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
           
           {/* Enhanced Header */}
           <div className="relative">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 bg-white dark:bg-slate-800/60 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 lg:p-6 border border-slate-200 dark:border-slate-700/50 shadow-lg">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 bg-white dark:bg-slate-800/60 backdrop-blur-sm rounded-lg sm:rounded-xl p-3 sm:p-4 border border-slate-200 dark:border-slate-700/50 shadow-sm">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button 
                     variant="ghost" 
                     size="icon" 
                     asChild
-                    className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg sm:rounded-xl shrink-0 bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-600/50 border border-slate-300 dark:border-slate-600/50 transition-all duration-200"
+                    className="h-9 w-9 rounded-lg shrink-0 bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-600/50 border border-slate-300 dark:border-slate-600/50"
                   >
                     <Link href="/dashboard/create/bulk">
-                      <ArrowLeft className="h-5 w-5" />
+                      <ArrowLeft className="h-4 w-4" />
                     </Link>
                   </Button>
                 </TooltipTrigger>
@@ -1293,13 +1293,13 @@ function EditPageContent() {
               </Tooltip>
               
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-purple-600 text-white shadow-lg shadow-orange-500/20">
-                    <Pencil className="h-6 w-6" />
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-orange-500 to-purple-600 text-white shadow-md">
+                    <Pencil className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h1 className="text-lg sm:text-xl lg:text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
+                      <h1 className="text-base sm:text-lg lg:text-xl font-bold tracking-tight text-slate-900 dark:text-white">
                         Edit Semester
                       </h1>
                       {hasUnsavedChanges && (
@@ -1309,7 +1309,7 @@ function EditPageContent() {
                         </Badge>
                       )}
                     </div>
-                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-0.5 truncate">
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 truncate">
                       {formData.semester.title || "Update semester details, courses & materials"}
                     </p>
                   </div>
@@ -1354,22 +1354,22 @@ function EditPageContent() {
           {/* Stats Overview */}
           <ProgressStats formData={formData} />
 
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Semester Info Card */}
-            <Card className="overflow-hidden border border-slate-200 dark:border-slate-700/50 shadow-lg bg-white dark:bg-slate-800/60 backdrop-blur-sm">
-              <CardHeader className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700/50 p-4 sm:p-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 text-white shadow-lg shadow-blue-500/20">
-                    <GraduationCap className="h-5 w-5" />
+            <Card className="overflow-hidden border border-slate-200 dark:border-slate-700/50 shadow-sm bg-white dark:bg-slate-800/60">
+              <CardHeader className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700/50 p-4">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 text-white shadow-md">
+                    <GraduationCap className="h-4 w-4" />
                   </div>
                   <div>
-                    <CardTitle className="text-lg font-semibold">Semester Information</CardTitle>
-                    <CardDescription className="text-sm">Configure semester details and settings</CardDescription>
+                    <CardTitle className="text-base font-semibold">Semester Information</CardTitle>
+                    <CardDescription className="text-xs">Configure semester details and settings</CardDescription>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-5 p-6">
-                <div className="grid gap-4 sm:gap-5 sm:grid-cols-2">
+              <CardContent className="space-y-4 p-4">
+                <div className="grid gap-3 md:gap-4 grid-cols-1 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label className="text-sm font-medium flex items-center gap-2 text-slate-700 dark:text-slate-300">
                       <FileText className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
@@ -1419,7 +1419,7 @@ function EditPageContent() {
                   />
                 </div>
 
-                <div className="grid gap-3 sm:gap-4 sm:grid-cols-3">
+                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
                   <div className="space-y-2">
                     <Label className="text-sm font-medium flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
                       <Calendar className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
@@ -1507,21 +1507,21 @@ function EditPageContent() {
             </Card>
 
             {/* Courses Section */}
-            <Card className="overflow-hidden border border-slate-200 dark:border-slate-700/50 shadow-lg bg-white dark:bg-slate-800/60 backdrop-blur-sm">
-              <CardHeader className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700/50 p-4 sm:p-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-purple-500 to-violet-500 text-white shadow-lg shadow-purple-500/20">
-                      <BookOpen className="h-5 w-5" />
+            <Card className="overflow-hidden border border-slate-200 dark:border-slate-700/50 shadow-sm bg-white dark:bg-slate-800/60">
+              <CardHeader className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700/50 p-3 sm:p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 text-white shadow-md">
+                      <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
                     </div>
                     <div>
-                      <CardTitle className="text-lg font-semibold flex items-center gap-2 text-slate-900 dark:text-white">
+                      <CardTitle className="text-base sm:text-lg font-semibold flex items-center gap-2 text-slate-900 dark:text-white">
                         Courses
                         <Badge className="bg-purple-100 dark:bg-purple-900/50 border border-purple-200 dark:border-purple-800/50 text-purple-700 dark:text-purple-300">
                           {formData.courses.length}
                         </Badge>
                       </CardTitle>
-                      <CardDescription className="text-sm">Manage courses with topics and materials</CardDescription>
+                      <CardDescription className="text-xs sm:text-sm">Manage courses with topics and materials</CardDescription>
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -1668,18 +1668,18 @@ function EditPageContent() {
                       </div>
                     </CardHeader>
                     {expandedCourse === courseIndex && (
-                      <CardContent className="space-y-6 pt-0 pb-6 px-6 animate-in slide-in-from-top-2 duration-200">
+                      <CardContent className="space-y-4 pt-0 pb-4 px-3 sm:px-4 animate-in slide-in-from-top-2 duration-200">
                         <Separator className="bg-gradient-to-r from-transparent via-slate-200 dark:via-slate-700 to-transparent" />
                         
                         {/* Course Basic Info */}
-                        <div className="bg-slate-50 dark:bg-slate-700/30 rounded-xl p-4 sm:p-5 space-y-4 sm:space-y-5 border border-slate-200 dark:border-slate-600/50">
+                        <div className="bg-slate-50 dark:bg-slate-700/30 rounded-lg p-3 sm:p-4 space-y-3 sm:space-y-4 border border-slate-200 dark:border-slate-600/50">
                           <h5 className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
                             <div className="p-1.5 rounded-lg bg-slate-200 dark:bg-slate-600/50">
                               <Users className="h-4 w-4 text-slate-600 dark:text-slate-400" />
                             </div>
                             Course Details
                           </h5>
-                          <div className="grid gap-3 sm:gap-4 sm:grid-cols-2">
+                          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
                             <div className="space-y-2">
                               <Label className="flex items-center gap-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300">
                                 Title <span className="text-red-500 dark:text-red-400">*</span>
@@ -1927,11 +1927,12 @@ function EditPageContent() {
           </div>
 
         {/* Action Bar */}
-        <div className="mt-6 flex items-center justify-between gap-4 p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
-          <div className="flex items-center gap-3">
+        <div className="mt-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 sm:p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Button
               variant="outline"
               onClick={() => router.push('/dashboard/create/bulk')}
+              className="flex-1 sm:flex-none"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Cancel
@@ -1941,7 +1942,7 @@ function EditPageContent() {
               <Button
                 variant="ghost"
                 onClick={loadSemesterData}
-                className="text-orange-600 dark:text-orange-400"
+                className="text-orange-600 dark:text-orange-400 flex-1 sm:flex-none"
               >
                 <Undo2 className="h-4 w-4 mr-2" />
                 Reset
@@ -1949,9 +1950,9 @@ function EditPageContent() {
             )}
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between sm:justify-end gap-3">
             {lastSaved && (
-              <span className="text-xs text-slate-500 dark:text-slate-400">
+              <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:inline">
                 Saved {lastSaved.toLocaleTimeString()}
               </span>
             )}
@@ -1959,6 +1960,7 @@ function EditPageContent() {
             <Button
               onClick={handleSubmit}
               disabled={isUpdating || !formData.semester.title || !formData.semester.section || formData.courses.length === 0}
+              className="w-full sm:w-auto"
             >
               {isUpdating ? (
                 <>
