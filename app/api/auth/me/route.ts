@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     // Get current user data
     const { data: adminUser, error: userError } = await supabase
       .from("admin_users")
-      .select("id, email, full_name, role, department, phone, is_active, last_login, created_at, updated_at")
+      .select("id, email, full_name, role, department, phone, is_active, is_approved, last_login, created_at, updated_at")
       .eq("id", decoded.userId)
       .eq("is_active", true)
       .single()

@@ -32,7 +32,10 @@ import {
   ExternalLink,
   Upload,
   ImagePlus,
-  Trash2
+  Trash2,
+  Search,
+  Users,
+  ChevronDown
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -42,6 +45,8 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Header } from "@/components/header"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
@@ -52,6 +57,8 @@ interface UserProfile {
   email: string
   role: string
   department: string | null
+  department_id: string | null
+  section_id: string | null
   phone: string | null
   bio: string | null
   avatar_url: string | null
@@ -73,6 +80,15 @@ interface UserProfile {
     batch_number: number
     batch_name: string
   } | null
+  departments: {
+    id: string
+    name: string
+    short_name: string
+  } | null
+  sections: {
+    id: string
+    name: string
+  } | null
 }
 
 interface Batch {
@@ -81,6 +97,30 @@ interface Batch {
   batch_name: string
   start_year: number
   end_year: number
+}
+
+interface Department {
+  id: string
+  name: string
+  short_name: string
+  description?: string
+  faculty?: string
+  is_active: boolean
+  order_index: number
+}
+
+interface Section {
+  id: string
+  name: string
+  description?: string
+  department_id?: string
+  batch_id?: string
+  is_active: boolean
+  departments?: {
+    id: string
+    name: string
+    short_name: string
+  }
 }
 
 // Role labels and colors with gradients
@@ -258,6 +298,8 @@ export default function ProfilePage() {
 
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [batches, setBatches] = useState<Batch[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
+  const [sections, setSections] = useState<Section[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -267,12 +309,20 @@ export default function ProfilePage() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  
+  // Search states for department and section
+  const [departmentSearch, setDepartmentSearch] = useState("")
+  const [sectionSearch, setSectionSearch] = useState("")
+  const [departmentOpen, setDepartmentOpen] = useState(false)
+  const [sectionOpen, setSectionOpen] = useState(false)
 
   // Form state
   const [formData, setFormData] = useState({
     fullName: "",
     phone: "",
     department: "",
+    departmentId: "",
+    sectionId: "",
     bio: "",
     avatarUrl: "",
     studentId: "",
@@ -312,13 +362,17 @@ export default function ProfilePage() {
       setError(null)
 
       try {
-        const [profileRes, batchesRes] = await Promise.all([
+        const [profileRes, batchesRes, departmentsRes, sectionsRes] = await Promise.all([
           fetch("/api/user/profile", { credentials: "include" }),
-          fetch("/api/batches")
+          fetch("/api/batches"),
+          fetch("/api/departments"),
+          fetch("/api/sections")
         ])
 
         const profileData = await profileRes.json()
         const batchesData = await batchesRes.json()
+        const departmentsData = await departmentsRes.json()
+        const sectionsData = await sectionsRes.json()
 
         if (profileData.success) {
           setProfile(profileData.user)
@@ -326,6 +380,8 @@ export default function ProfilePage() {
             fullName: profileData.user.full_name || "",
             phone: profileData.user.phone || "",
             department: profileData.user.department || "",
+            departmentId: profileData.user.department_id || "",
+            sectionId: profileData.user.section_id || "",
             bio: profileData.user.bio || "",
             avatarUrl: profileData.user.avatar_url || "",
             studentId: profileData.user.student_id || "",
@@ -345,6 +401,14 @@ export default function ProfilePage() {
 
         if (batchesData.success) {
           setBatches(batchesData.batches || [])
+        }
+        
+        if (departmentsData.success) {
+          setDepartments(departmentsData.departments || [])
+        }
+        
+        if (sectionsData.success) {
+          setSections(sectionsData.sections || [])
         }
       } catch (err) {
         setError("Failed to load profile")
@@ -487,6 +551,8 @@ export default function ProfilePage() {
           fullName: formData.fullName,
           phone: formData.phone || null,
           department: formData.department || null,
+          departmentId: formData.departmentId || null,
+          sectionId: formData.sectionId || null,
           bio: formData.bio || null,
           avatarUrl: formData.avatarUrl || null,
           studentId: formData.studentId || null,
@@ -520,6 +586,8 @@ export default function ProfilePage() {
         fullName: profile.full_name || "",
         phone: profile.phone || "",
         department: profile.department || "",
+        departmentId: profile.department_id || "",
+        sectionId: profile.section_id || "",
         bio: profile.bio || "",
         avatarUrl: profile.avatar_url || "",
         studentId: profile.student_id || "",
@@ -538,6 +606,8 @@ export default function ProfilePage() {
     setError(null)
     setImageError(false)
     setAvatarPreview(null)
+    setDepartmentSearch("")
+    setSectionSearch("")
   }, [profile])
 
   const formatDate = useCallback((dateString: string) => {
@@ -871,21 +941,147 @@ export default function ProfilePage() {
                         <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                           <Building2 className="w-3 h-3" /> Department
                         </Label>
-                        <Input
-                          value={formData.department}
-                          onChange={(e) => handleInputChange("department", e.target.value)}
-                          placeholder="e.g., CSE"
-                          className="h-10 bg-muted/50 border-0"
-                        />
+                        <Popover open={departmentOpen} onOpenChange={setDepartmentOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={departmentOpen}
+                              className="w-full h-10 bg-muted/50 border-0 justify-between font-normal"
+                            >
+                              {formData.departmentId
+                                ? departments.find((d) => d.id === formData.departmentId)?.short_name + " - " + departments.find((d) => d.id === formData.departmentId)?.name
+                                : "Select department..."}
+                              <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-full p-0" align="start">
+                            <Command>
+                              <CommandInput 
+                                placeholder="Search department..." 
+                                value={departmentSearch}
+                                onValueChange={setDepartmentSearch}
+                              />
+                              <CommandList>
+                                <CommandEmpty>No department found.</CommandEmpty>
+                                <CommandGroup className="max-h-64 overflow-auto">
+                                  {departments
+                                    .filter(dept => 
+                                      dept.name.toLowerCase().includes(departmentSearch.toLowerCase()) ||
+                                      dept.short_name.toLowerCase().includes(departmentSearch.toLowerCase())
+                                    )
+                                    .map((dept) => (
+                                      <CommandItem
+                                        key={dept.id}
+                                        value={dept.id}
+                                        onSelect={() => {
+                                          handleInputChange("departmentId", dept.id)
+                                          handleInputChange("department", dept.short_name)
+                                          setDepartmentOpen(false)
+                                          setDepartmentSearch("")
+                                        }}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-4 w-4",
+                                            formData.departmentId === dept.id ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        <div className="flex flex-col">
+                                          <span className="font-medium">{dept.short_name}</span>
+                                          <span className="text-xs text-muted-foreground">{dept.name}</span>
+                                        </div>
+                                      </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                       </div>
-                    ) : profile?.department && (
+                    ) : (profile?.departments || profile?.department) && (
                       <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors">
                         <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
                           <Building2 className="w-4 h-4 text-primary" />
                         </div>
                         <div className="text-left">
                           <p className="text-xs text-muted-foreground">Department</p>
-                          <p className="text-sm font-medium">{profile.department}</p>
+                          <p className="text-sm font-medium">
+                            {profile.departments 
+                              ? `${profile.departments.short_name} - ${profile.departments.name}`
+                              : profile.department}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Section */}
+                    {isEditing ? (
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                          <Users className="w-3 h-3" /> Section
+                        </Label>
+                        <Popover open={sectionOpen} onOpenChange={setSectionOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={sectionOpen}
+                              className="w-full h-10 bg-muted/50 border-0 justify-between font-normal"
+                            >
+                              {formData.sectionId
+                                ? sections.find((s) => s.id === formData.sectionId)?.name
+                                : "Select section..."}
+                              <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-full p-0" align="start">
+                            <Command>
+                              <CommandInput 
+                                placeholder="Search section..." 
+                                value={sectionSearch}
+                                onValueChange={setSectionSearch}
+                              />
+                              <CommandList>
+                                <CommandEmpty>No section found.</CommandEmpty>
+                                <CommandGroup className="max-h-64 overflow-auto">
+                                  {sections
+                                    .filter(section => 
+                                      section.name.toLowerCase().includes(sectionSearch.toLowerCase())
+                                    )
+                                    .map((section) => (
+                                      <CommandItem
+                                        key={section.id}
+                                        value={section.id}
+                                        onSelect={() => {
+                                          handleInputChange("sectionId", section.id)
+                                          setSectionOpen(false)
+                                          setSectionSearch("")
+                                        }}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-4 w-4",
+                                            formData.sectionId === section.id ? "opacity-100" : "opacity-0"
+                                          )}
+                                        />
+                                        <span className="font-medium">Section {section.name}</span>
+                                      </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    ) : profile?.sections && (
+                      <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors">
+                        <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <Users className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-xs text-muted-foreground">Section</p>
+                          <p className="text-sm font-medium">Section {profile.sections.name}</p>
                         </div>
                       </div>
                     )}

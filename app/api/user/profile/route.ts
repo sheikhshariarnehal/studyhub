@@ -38,7 +38,8 @@ export async function GET(request: NextRequest) {
 
     const supabase = createClient()
 
-    const { data: user, error } = await supabase
+    // First try with all columns including new ones
+    let { data: user, error } = await supabase
       .from("admin_users")
       .select(`
         id,
@@ -46,6 +47,8 @@ export async function GET(request: NextRequest) {
         email,
         role,
         department,
+        department_id,
+        section_id,
         phone,
         bio,
         avatar_url,
@@ -54,27 +57,104 @@ export async function GET(request: NextRequest) {
         batch_id,
         is_approved,
         created_at,
-        updated_at,
-        batches (
-          id,
-          batch_number,
-          batch_name
-        )
+        updated_at
       `)
       .eq("id", userId)
       .single()
 
-    if (error || !user) {
-      console.error("Error fetching user:", error)
+    // If error (likely missing columns), try with basic columns only
+    if (error) {
+      console.log("Trying basic query without new columns...")
+      const { data: basicUser, error: basicError } = await supabase
+        .from("admin_users")
+        .select(`
+          id,
+          full_name,
+          email,
+          role,
+          department,
+          phone,
+          is_approved,
+          created_at,
+          updated_at
+        `)
+        .eq("id", userId)
+        .single()
+      
+      if (basicError || !basicUser) {
+        console.error("Error fetching user:", basicError)
+        return NextResponse.json(
+          { success: false, error: "User not found" },
+          { status: 404 }
+        )
+      }
+
+      // Return basic user with null values for missing fields
+      return NextResponse.json({
+        success: true,
+        user: {
+          ...basicUser,
+          bio: null,
+          avatar_url: null,
+          social_links: null,
+          student_id: null,
+          batch_id: null,
+          department_id: null,
+          section_id: null,
+          batches: null,
+          departments: null,
+          sections: null
+        }
+      })
+    }
+
+    if (!user) {
       return NextResponse.json(
         { success: false, error: "User not found" },
         { status: 404 }
       )
     }
 
+    // Fetch related data separately if IDs exist
+    let batch = null
+    let departmentData = null
+    let section = null
+
+    if (user.batch_id) {
+      const { data } = await supabase
+        .from("batches")
+        .select("id, batch_number, batch_name")
+        .eq("id", user.batch_id)
+        .single()
+      batch = data
+    }
+
+    if (user.department_id) {
+      const { data } = await supabase
+        .from("departments")
+        .select("id, name, short_name")
+        .eq("id", user.department_id)
+        .single()
+      departmentData = data
+    }
+
+    if (user.section_id) {
+      const { data } = await supabase
+        .from("sections")
+        .select("id, name")
+        .eq("id", user.section_id)
+        .single()
+      section = data
+    }
+
     return NextResponse.json({
       success: true,
-      user
+      user: {
+        ...user,
+        batches: batch,
+        departments: departmentData,
+        sections: section
+      }
     })
 
   } catch (error) {
@@ -102,7 +182,9 @@ export async function PUT(request: NextRequest) {
     const { 
       fullName, 
       phone, 
-      department, 
+      department,
+      departmentId,
+      sectionId,
       bio, 
       avatarUrl, 
       socialLinks,
@@ -120,6 +202,8 @@ export async function PUT(request: NextRequest) {
     if (fullName !== undefined) updateData.full_name = fullName.trim()
     if (phone !== undefined) updateData.phone = phone?.trim() || null
     if (department !== undefined) updateData.department = department?.trim() || null
+    if (departmentId !== undefined) updateData.department_id = departmentId || null
+    if (sectionId !== undefined) updateData.section_id = sectionId || null
     if (bio !== undefined) updateData.bio = bio?.trim() || null
     if (avatarUrl !== undefined) updateData.avatar_url = avatarUrl?.trim() || null
     if (socialLinks !== undefined) updateData.social_links = socialLinks || {}
@@ -170,6 +254,8 @@ export async function PUT(request: NextRequest) {
         email,
         role,
         department,
+        department_id,
+        section_id,
         phone,
         bio,
         avatar_url,
@@ -178,12 +264,7 @@ export async function PUT(request: NextRequest) {
         batch_id,
         is_approved,
         created_at,
-        updated_at,
-        batches (
-          id,
-          batch_number,
-          batch_name
-        )
+        updated_at
       `)
       .single()
 
@@ -195,10 +276,47 @@ export async function PUT(request: NextRequest) {
       )
     }
 
+    // Fetch related data separately if IDs exist
+    let batch = null
+    let departmentData = null
+    let section = null
+
+    if (updatedUser.batch_id) {
+      const { data } = await supabase
+        .from("batches")
+        .select("id, batch_number, batch_name")
+        .eq("id", updatedUser.batch_id)
+        .single()
+      batch = data
+    }
+
+    if (updatedUser.department_id) {
+      const { data } = await supabase
+        .from("departments")
+        .select("id, name, short_name")
+        .eq("id", updatedUser.department_id)
+        .single()
+      departmentData = data
+    }
+
+    if (updatedUser.section_id) {
+      const { data } = await supabase
+        .from("sections")
+        .select("id, name")
+        .eq("id", updatedUser.section_id)
+        .single()
+      section = data
+    }
+
     return NextResponse.json({
       success: true,
       message: "Profile updated successfully",
-      user: updatedUser
+      user: {
+        ...updatedUser,
+        batches: batch,
+        departments: departmentData,
+        sections: section
+      }
     })
 
   } catch (error) {

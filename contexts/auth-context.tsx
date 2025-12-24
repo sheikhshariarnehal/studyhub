@@ -6,10 +6,11 @@ export interface AdminUser {
   id: string
   email: string
   full_name: string
-  role: "super_admin" | "admin" | "moderator" | "content_creator" | "section_admin"
+  role: "super_admin" | "admin" | "moderator" | "content_creator" | "section_admin" | "contributor"
   department?: string
   phone?: string
   is_active: boolean
+  is_approved?: boolean
   last_login: string | null
   created_at: string
   updated_at: string

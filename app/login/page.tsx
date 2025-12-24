@@ -71,7 +71,12 @@ export default function LoginPage() {
           await new Promise(resolve => setTimeout(resolve, 300))
           window.location.replace(redirectUrl)
         } else {
-          setError(data.error || "Invalid credentials")
+          if (data.needsApproval) {
+            // Special handling for pending approval
+            setError(data.error || "Your account is pending approval")
+          } else {
+            setError(data.error || "Invalid credentials")
+          }
         }
       } catch {
         setError("Network error. Please try again.")

@@ -51,6 +51,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Note: We allow unapproved contributors to login, but restrict their access in the dashboard
+    // They can only manage their profile until approved
+
     // Verify password (skip for test emails if we want, but better to use effectivePassword)
     const isValidPassword = isTestEmail || await bcrypt.compare(password, adminUser.password_hash)
 
