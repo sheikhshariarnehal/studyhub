@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, Suspense, useMemo, memo } from "react"
+import { useState, useEffect, useCallback, Suspense, useMemo, memo, useRef, useTransition, startTransition } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
@@ -16,6 +16,8 @@ import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { toast } from "sonner"
 import {
   DndContext,
@@ -66,8 +68,36 @@ import {
   Check,
   Info,
   Keyboard,
-  Undo2
+  Undo2,
+  Search,
+  Filter,
+  SortAsc,
+  Clock,
+  AlertTriangle,
+  Download,
+  Upload
 } from "lucide-react"
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
+
+// Debounce hook for input optimization
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value)
+  
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay)
+    return () => clearTimeout(handler)
+  }, [value, delay])
+  
+  return debouncedValue
+}
+
+// Batch state updates utility
+const batchUpdate = (fn: () => void) => {
+  startTransition(() => fn())
+}
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -1011,6 +1041,20 @@ function EditPageContent() {
     semester: { title: "", description: "", section: "", has_midterm: true, has_final: true, is_active: true },
     courses: []
   })
+  
+  // Professional CMS features
+  const [searchQuery, setSearchQuery] = useState("")
+  const debouncedSearchQuery = useDebounce(searchQuery, 300) // Debounce search for performance
+  const [filterType, setFilterType] = useState<"all" | "highlighted" | "normal">("all")
+  const [isPending, startTransitionUpdate] = useTransition()
+  
+  // Refs for performance optimization
+  const formDataRef = useRef(formData)
+  formDataRef.current = formData
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [itemToDelete, setItemToDelete] = useState<{ type: 'course' | 'topic' | 'tool', index: number, parentIndex?: number } | null>(null)
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
 
   // Memoized sensors for drag and drop
   const sensors = useSensors(
@@ -1039,6 +1083,39 @@ function EditPageContent() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [formData, isUpdating])
+
+  // Auto-save functionality
+  useEffect(() => {
+    if (!autoSaveEnabled || !hasUnsavedChanges || isLoading || isUpdating) return
+    
+    const autoSaveTimer = setTimeout(async () => {
+      if (formData.semester.title && formData.semester.section && formData.courses.length > 0) {
+        setIsSaving(true)
+        try {
+          const response = await fetch(`/api/admin/all-in-one/${semesterId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+          })
+          
+          if (response.ok) {
+            setHasUnsavedChanges(false)
+            setLastSaved(new Date())
+            toast.success("Auto-saved", {
+              icon: <Clock className="h-4 w-4 text-green-500" />,
+              duration: 2000
+            })
+          }
+        } catch (error) {
+          console.error('Auto-save failed:', error)
+        } finally {
+          setIsSaving(false)
+        }
+      }
+    }, 5000) // Auto-save after 5 seconds of inactivity
+    
+    return () => clearTimeout(autoSaveTimer)
+  }, [formData, hasUnsavedChanges, autoSaveEnabled, isLoading, isUpdating, semesterId])
 
   // Load semester data on mount
   useEffect(() => {
@@ -1143,6 +1220,60 @@ function EditPageContent() {
     toast.success("New course added", { icon: <Plus className="h-4 w-4 text-green-500" /> })
   }, [formData.courses.length])
 
+  // Filter and search courses - optimized with debounced search
+  const filteredCourses = useMemo(() => {
+    const courses = formData.courses
+    const searchLower = debouncedSearchQuery.toLowerCase()
+    
+    let filtered = courses
+    
+    // Apply search filter with debounced query
+    if (searchLower) {
+      filtered = filtered.filter(course => 
+        course.title.toLowerCase().includes(searchLower) ||
+        course.course_code.toLowerCase().includes(searchLower) ||
+        course.teacher_name.toLowerCase().includes(searchLower)
+      )
+    }
+    
+    // Apply type filter
+    if (filterType === "highlighted") {
+      filtered = filtered.filter(course => course.is_highlighted)
+    } else if (filterType === "normal") {
+      filtered = filtered.filter(course => !course.is_highlighted)
+    }
+    
+    // Create stable references
+    return filtered.map((course) => ({
+      course,
+      originalIndex: courses.indexOf(course)
+    }))
+  }, [formData.courses, debouncedSearchQuery, filterType])
+
+  const confirmDelete = useCallback((type: 'course' | 'topic' | 'tool', index: number, parentIndex?: number) => {
+    setItemToDelete({ type, index, parentIndex })
+    setDeleteConfirmOpen(true)
+  }, [])
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!itemToDelete) return
+    
+    const { type, index, parentIndex } = itemToDelete
+    
+    if (type === 'course') {
+      setFormData(prev => ({ ...prev, courses: prev.courses.filter((_, i) => i !== index) }))
+      setExpandedCourse(prev => prev === index ? null : prev)
+      toast.success("Course removed", { icon: <Trash2 className="h-4 w-4 text-red-500" /> })
+    } else if (type === 'topic' && parentIndex !== undefined) {
+      removeTopic(parentIndex, index)
+    } else if (type === 'tool' && parentIndex !== undefined) {
+      removeStudyTool(parentIndex, index)
+    }
+    
+    setDeleteConfirmOpen(false)
+    setItemToDelete(null)
+  }, [itemToDelete])
+
   const removeCourse = useCallback((index: number) => {
     setFormData(prev => ({ ...prev, courses: prev.courses.filter((_, i) => i !== index) }))
     setExpandedCourse(prev => prev === index ? null : prev)
@@ -1150,8 +1281,10 @@ function EditPageContent() {
   }, [])
 
   const updateCourse = useCallback((index: number, field: keyof CourseData, value: any) => {
-    setFormData(prev => ({ ...prev, courses: prev.courses.map((course, i) => i === index ? { ...course, [field]: value } : course) }))
-  }, [])
+    startTransitionUpdate(() => {
+      setFormData(prev => ({ ...prev, courses: prev.courses.map((course, i) => i === index ? { ...course, [field]: value } : course) }))
+    })
+  }, [startTransitionUpdate])
 
   const addTopic = useCallback((courseIndex: number) => {
     setFormData(prev => ({
@@ -1169,8 +1302,10 @@ function EditPageContent() {
   }, [])
 
   const updateTopic = useCallback((courseIndex: number, topicIndex: number, field: keyof TopicData, value: any) => {
-    setFormData(prev => ({ ...prev, courses: prev.courses.map((course, i) => i === courseIndex ? { ...course, topics: course.topics.map((topic, j) => j === topicIndex ? { ...topic, [field]: value } : topic) } : course) }))
-  }, [])
+    startTransitionUpdate(() => {
+      setFormData(prev => ({ ...prev, courses: prev.courses.map((course, i) => i === courseIndex ? { ...course, topics: course.topics.map((topic, j) => j === topicIndex ? { ...topic, [field]: value } : topic) } : course) }))
+    })
+  }, [startTransitionUpdate])
 
   const addSlide = useCallback((courseIndex: number, topicIndex: number) => {
     setFormData(prev => ({ ...prev, courses: prev.courses.map((course, i) => i === courseIndex ? { ...course, topics: course.topics.map((topic, j) => j === topicIndex ? { ...topic, slides: [...topic.slides, { title: "", url: "", description: "" }] } : topic) } : course) }))
@@ -1181,8 +1316,10 @@ function EditPageContent() {
   }, [])
 
   const updateSlide = useCallback((courseIndex: number, topicIndex: number, slideIndex: number, field: string, value: string) => {
-    setFormData(prev => ({ ...prev, courses: prev.courses.map((course, i) => i === courseIndex ? { ...course, topics: course.topics.map((topic, j) => j === topicIndex ? { ...topic, slides: topic.slides.map((slide, k) => k === slideIndex ? { ...slide, [field]: value } : slide) } : topic) } : course) }))
-  }, [])
+    startTransitionUpdate(() => {
+      setFormData(prev => ({ ...prev, courses: prev.courses.map((course, i) => i === courseIndex ? { ...course, topics: course.topics.map((topic, j) => j === topicIndex ? { ...topic, slides: topic.slides.map((slide, k) => k === slideIndex ? { ...slide, [field]: value } : slide) } : topic) } : course) }))
+    })
+  }, [startTransitionUpdate])
 
   const addVideo = useCallback((courseIndex: number, topicIndex: number) => {
     setFormData(prev => ({ ...prev, courses: prev.courses.map((course, i) => i === courseIndex ? { ...course, topics: course.topics.map((topic, j) => j === topicIndex ? { ...topic, videos: [...topic.videos, { title: "", url: "", description: "" }] } : topic) } : course) }))
@@ -1193,8 +1330,10 @@ function EditPageContent() {
   }, [])
 
   const updateVideo = useCallback((courseIndex: number, topicIndex: number, videoIndex: number, field: string, value: string) => {
-    setFormData(prev => ({ ...prev, courses: prev.courses.map((course, i) => i === courseIndex ? { ...course, topics: course.topics.map((topic, j) => j === topicIndex ? { ...topic, videos: topic.videos.map((video, k) => k === videoIndex ? { ...video, [field]: value } : video) } : topic) } : course) }))
-  }, [])
+    startTransitionUpdate(() => {
+      setFormData(prev => ({ ...prev, courses: prev.courses.map((course, i) => i === courseIndex ? { ...course, topics: course.topics.map((topic, j) => j === topicIndex ? { ...topic, videos: topic.videos.map((video, k) => k === videoIndex ? { ...video, [field]: value } : video) } : topic) } : course) }))
+    })
+  }, [startTransitionUpdate])
 
   const addStudyTool = useCallback((courseIndex: number) => {
     setFormData(prev => ({ ...prev, courses: prev.courses.map((course, i) => i === courseIndex ? { ...course, studyTools: [...course.studyTools, { title: "", type: "previous_questions", content_url: "", exam_type: "both", description: "" }] } : course) }))
@@ -1205,8 +1344,10 @@ function EditPageContent() {
   }, [])
 
   const updateStudyTool = useCallback((courseIndex: number, toolIndex: number, field: keyof StudyToolData, value: any) => {
-    setFormData(prev => ({ ...prev, courses: prev.courses.map((course, i) => i === courseIndex ? { ...course, studyTools: course.studyTools.map((tool, j) => j === toolIndex ? { ...tool, [field]: value } : tool) } : course) }))
-  }, [])
+    startTransitionUpdate(() => {
+      setFormData(prev => ({ ...prev, courses: prev.courses.map((course, i) => i === courseIndex ? { ...course, studyTools: course.studyTools.map((tool, j) => j === toolIndex ? { ...tool, [field]: value } : tool) } : course) }))
+    })
+  }, [startTransitionUpdate])
 
   const validateForm = useCallback((): boolean => {
     if (!formData.semester.title.trim()) { 
@@ -1268,112 +1409,98 @@ function EditPageContent() {
 
   return (
     <TooltipProvider>
-      <div className="min-h-screen">
-        <div className="w-full max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
+      <div className="space-y-6 p-6">
           
-          {/* Enhanced Header */}
+          {/* Enhanced Header with Auto-save & Status */}
           <div className="relative">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 bg-white dark:bg-slate-800/60 backdrop-blur-sm rounded-lg sm:rounded-xl p-3 sm:p-4 border border-slate-200 dark:border-slate-700/50 shadow-sm">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    asChild
-                    className="h-9 w-9 rounded-lg shrink-0 bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-600/50 border border-slate-300 dark:border-slate-600/50"
-                  >
-                    <Link href="/dashboard/create/bulk">
-                      <ArrowLeft className="h-4 w-4" />
-                    </Link>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">
-                  <p className="text-xs">Back to list</p>
-                </TooltipContent>
-              </Tooltip>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                asChild
+              >
+                <Link href="/dashboard/create/bulk">
+                  <ArrowLeft className="h-4 w-4" />
+                </Link>
+              </Button>
               
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-orange-500 to-purple-600 text-white shadow-md">
-                    <Pencil className="h-5 w-5" />
+              <div className="flex-1">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-orange-500 to-purple-600">
+                    <Pencil className="h-5 w-5 text-white" />
                   </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h1 className="text-base sm:text-lg lg:text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h1 className="text-2xl font-bold">
                         Edit Semester
                       </h1>
                       {hasUnsavedChanges && (
-                        <Badge className="bg-orange-500/20 border-orange-500/30 text-orange-600 dark:text-orange-400 text-xs">
-                          <span className="h-1.5 w-1.5 rounded-full bg-orange-500 mr-1.5 animate-pulse" />
+                        <Badge variant="outline" className="text-orange-600">
                           Unsaved
                         </Badge>
                       )}
+                      {isSaving && (
+                        <Badge variant="outline">
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          Saving...
+                        </Badge>
+                      )}
                     </div>
-                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5 truncate">
+                    <p className="text-sm text-muted-foreground">
                       {formData.semester.title || "Update semester details, courses & materials"}
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      onClick={loadSemesterData}
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 sm:h-9 text-xs sm:text-sm rounded-lg bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200 dark:hover:bg-slate-600/50 border border-slate-300 dark:border-slate-600/50"
-                    >
-                      <RefreshCw className="h-4 w-4 sm:mr-2" />
-                      <span className="hidden sm:inline">Reload</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="text-xs">Reload data from server</p>
-                  </TooltipContent>
-                </Tooltip>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={autoSaveEnabled}
+                    onCheckedChange={setAutoSaveEnabled}
+                  />
+                  <span className="text-sm">Auto-save</span>
+                </div>
                 
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="hidden md:flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600/50 text-xs text-slate-600 dark:text-slate-300">
-                      <Keyboard className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
-                      <kbd className="font-mono text-[10px] bg-slate-200 dark:bg-slate-600 px-1.5 py-0.5 rounded border border-slate-300 dark:border-slate-500">Ctrl</kbd>
-                      <span className="text-[10px]">+</span>
-                      <kbd className="font-mono text-[10px] bg-slate-200 dark:bg-slate-600 px-1.5 py-0.5 rounded border border-slate-300 dark:border-slate-500">S</kbd>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="text-xs">Quick save shortcut</p>
-                  </TooltipContent>
-                </Tooltip>
+                <Button
+                  onClick={loadSemesterData}
+                  variant="outline"
+                  size="sm"
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Reload
+                </Button>
+                
+                <div className="hidden md:flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <Keyboard className="h-4 w-4" />
+                  <kbd className="px-2 py-1 text-xs border rounded">Ctrl</kbd>
+                  <span>+</span>
+                  <kbd className="px-2 py-1 text-xs border rounded">S</kbd>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Stats Overview */}
-          <ProgressStats formData={formData} />
-
-          <div className="space-y-4">
+          <div className="space-y-6">
             {/* Semester Info Card */}
-            <Card className="overflow-hidden border border-slate-200 dark:border-slate-700/50 shadow-sm bg-white dark:bg-slate-800/60">
-              <CardHeader className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700/50 p-4">
+            <Card>
+              <CardHeader>
                 <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 text-white shadow-md">
-                    <GraduationCap className="h-4 w-4" />
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500">
+                    <GraduationCap className="h-5 w-5 text-white" />
                   </div>
                   <div>
-                    <CardTitle className="text-base font-semibold">Semester Information</CardTitle>
-                    <CardDescription className="text-xs">Configure semester details and settings</CardDescription>
+                    <CardTitle>Semester Information</CardTitle>
+                    <CardDescription>Configure semester details and settings</CardDescription>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4 p-4">
-                <div className="grid gap-3 md:gap-4 grid-cols-1 md:grid-cols-2">
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                      <FileText className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
-                      Semester Title <span className="text-red-500 dark:text-red-400">*</span>
+                    <Label>
+                      <FileText className="h-4 w-4 inline mr-2" />
+                      Semester Title <span className="text-destructive">*</span>
                     </Label>
                     <Input
                       placeholder="e.g., Fall 2025"
@@ -1382,13 +1509,12 @@ function EditPageContent() {
                         ...prev,
                         semester: { ...prev.semester, title: e.target.value }
                       }))}
-                      className="h-10 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500/20"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                      <Users className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
-                      Section <span className="text-red-500 dark:text-red-400">*</span>
+                    <Label>
+                      <Users className="h-4 w-4 inline mr-2" />
+                      Section <span className="text-destructive">*</span>
                     </Label>
                     <Input
                       placeholder="e.g., 63 G"
@@ -1397,14 +1523,13 @@ function EditPageContent() {
                         ...prev,
                         semester: { ...prev.semester, section: e.target.value }
                       }))}
-                      className="h-10 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500/20"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium flex items-center gap-2 text-slate-700 dark:text-slate-300">
-                    <FileText className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                  <Label>
+                    <FileText className="h-4 w-4 inline mr-2" />
                     Description
                   </Label>
                   <Textarea
@@ -1415,20 +1540,18 @@ function EditPageContent() {
                       semester: { ...prev.semester, description: e.target.value }
                     }))}
                     rows={3}
-                    className="resize-none rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-blue-500/20"
                   />
                 </div>
 
-                <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
-                      <Calendar className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                    <Label>
+                      <Calendar className="h-4 w-4 inline mr-2" />
                       Start Date
                     </Label>
                     <Input
                       type="date"
                       value={formData.semester.start_date}
-                      className="h-10 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
                       onChange={(e) => setFormData(prev => ({
                         ...prev,
                         semester: { ...prev.semester, start_date: e.target.value }
@@ -1436,8 +1559,8 @@ function EditPageContent() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
-                      <Calendar className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                    <Label>
+                      <Calendar className="h-4 w-4 inline mr-2" />
                       End Date
                     </Label>
                     <Input
@@ -1447,11 +1570,10 @@ function EditPageContent() {
                         ...prev,
                         semester: { ...prev.semester, end_date: e.target.value }
                       }))}
-                      className="h-10 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Default Credits</Label>
+                    <Label>Default Credits</Label>
                     <Input
                       type="number"
                       min="1"
@@ -1461,15 +1583,14 @@ function EditPageContent() {
                         ...prev,
                         semester: { ...prev.semester, default_credits: parseInt(e.target.value) || 3 }
                       }))}
-                      className="h-10 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500/20"
                     />
                   </div>
                 </div>
 
                 <Separator />
 
-                <div className="flex flex-wrap gap-3 sm:gap-6">
-                  <div className="flex items-center gap-3 bg-slate-100 dark:bg-slate-700/50 px-3 sm:px-4 py-2.5 rounded-lg sm:rounded-xl border border-slate-300 dark:border-slate-600/50 hover:border-blue-400 dark:hover:border-blue-500/50 transition-colors">
+                <div className="flex flex-wrap gap-4">
+                  <div className="flex items-center gap-3">
                     <Switch
                       checked={formData.semester.has_midterm}
                       onCheckedChange={(checked) => setFormData(prev => ({
@@ -1477,9 +1598,9 @@ function EditPageContent() {
                         semester: { ...prev.semester, has_midterm: checked }
                       }))}
                     />
-                    <Label className="text-xs sm:text-sm cursor-pointer font-medium text-slate-700 dark:text-slate-300">Has Midterm</Label>
+                    <Label className="cursor-pointer">Has Midterm</Label>
                   </div>
-                  <div className="flex items-center gap-3 bg-slate-100 dark:bg-slate-700/50 px-3 sm:px-4 py-2.5 rounded-lg sm:rounded-xl border border-slate-300 dark:border-slate-600/50 hover:border-cyan-400 dark:hover:border-cyan-500/50 transition-colors">
+                  <div className="flex items-center gap-3">
                     <Switch
                       checked={formData.semester.has_final}
                       onCheckedChange={(checked) => setFormData(prev => ({
@@ -1487,9 +1608,9 @@ function EditPageContent() {
                         semester: { ...prev.semester, has_final: checked }
                       }))}
                     />
-                    <Label className="text-xs sm:text-sm cursor-pointer font-medium text-slate-700 dark:text-slate-300">Has Final</Label>
+                    <Label className="cursor-pointer">Has Final</Label>
                   </div>
-                  <div className="flex items-center gap-3 bg-emerald-50 dark:bg-emerald-900/30 px-3 sm:px-4 py-2.5 rounded-lg sm:rounded-xl border border-emerald-200 dark:border-emerald-700/50 hover:border-emerald-400 dark:hover:border-emerald-500/50 transition-colors">
+                  <div className="flex items-center gap-3">
                     <Switch
                       checked={formData.semester.is_active}
                       onCheckedChange={(checked) => setFormData(prev => ({
@@ -1497,9 +1618,8 @@ function EditPageContent() {
                         semester: { ...prev.semester, is_active: checked }
                       }))}
                     />
-                    <Label className="text-xs sm:text-sm cursor-pointer font-medium flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
-                      <Sparkles className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                      Set as Active
+                    <Label className="cursor-pointer">
+                      ✨ Set as Active
                     </Label>
                   </div>
                 </div>
@@ -1507,12 +1627,12 @@ function EditPageContent() {
             </Card>
 
             {/* Courses Section */}
-            <Card className="overflow-hidden border border-slate-200 dark:border-slate-700/50 shadow-sm bg-white dark:bg-slate-800/60">
-              <CardHeader className="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700/50 p-3 sm:p-4">
+            <Card className="border-l-4 border-l-purple-500">
+              <CardHeader className="bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-950/30 dark:to-violet-950/30 border-b-2 border-purple-200 dark:border-purple-800">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-2 sm:gap-3">
-                    <div className="p-2 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 text-white shadow-md">
-                      <BookOpen className="h-4 w-4 sm:h-5 sm:w-5" />
+                    <div className="p-2 rounded-lg bg-gradient-to-br from-purple-600 to-violet-600 shadow-lg">
+                      <BookOpen className="h-5 w-5 text-white" />
                     </div>
                     <div>
                       <CardTitle className="text-base sm:text-lg font-semibold flex items-center gap-2 text-slate-900 dark:text-white">
@@ -1581,28 +1701,36 @@ function EditPageContent() {
               </div>
             ) : (
               <div className="space-y-4">
-                {formData.courses.map((course, courseIndex) => (
+                {filteredCourses.map(({ course, originalIndex }, displayIndex) => (
                   <Card 
-                    key={courseIndex} 
+                    key={originalIndex} 
                     className={cn(
-                      "overflow-hidden transition-all duration-200 border border-slate-200 dark:border-slate-700/50 shadow-sm hover:shadow-md bg-white dark:bg-slate-800/50",
-                      expandedCourse === courseIndex 
-                        ? "ring-2 ring-purple-400 dark:ring-purple-500/40 shadow-lg" 
+                      "overflow-hidden transition-all duration-200 border-2 shadow-md hover:shadow-lg",
+                      course.is_highlighted
+                        ? "border-amber-400 dark:border-amber-600 bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/20 dark:to-yellow-950/20"
+                        : "border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800/50",
+                      expandedCourse === originalIndex 
+                        ? "ring-4 ring-purple-400 dark:ring-purple-500/40 shadow-xl border-purple-500" 
                         : ""
                     )}
                   >
-                    <CardHeader className="pb-3 bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-700/50 p-3 sm:p-4">
+                    <CardHeader className={cn(
+                      "pb-3 border-b-2 p-3 sm:p-4",
+                      course.is_highlighted
+                        ? "bg-gradient-to-r from-amber-100 to-yellow-100 dark:from-amber-900/30 dark:to-yellow-900/30 border-amber-300 dark:border-amber-700"
+                        : "bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-800/70 dark:to-slate-800/50 border-slate-300 dark:border-slate-700"
+                    )}>
                       <div 
                         className="flex items-center justify-between gap-3 cursor-pointer group"
-                        onClick={() => setExpandedCourse(expandedCourse === courseIndex ? null : courseIndex)}
+                        onClick={() => setExpandedCourse(expandedCourse === originalIndex ? null : originalIndex)}
                         role="button"
                         tabIndex={0}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setExpandedCourse(expandedCourse === courseIndex ? null : courseIndex) }}
-                        aria-expanded={expandedCourse === courseIndex}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setExpandedCourse(expandedCourse === originalIndex ? null : originalIndex) }}
+                        aria-expanded={expandedCourse === originalIndex}
                       >
                         <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
                           <Badge className="shrink-0 bg-gradient-to-r from-purple-600 to-violet-600 text-white border-0">
-                            {courseIndex + 1}
+                            {originalIndex + 1}
                           </Badge>
                           <span className="font-semibold truncate text-sm sm:text-base">
                             {course.title || <span className="text-muted-foreground italic">Untitled Course</span>}
@@ -1636,11 +1764,11 @@ function EditPageContent() {
                         <div className="flex items-center gap-2 shrink-0">
                           <div className={cn(
                             "p-1.5 rounded-lg transition-all duration-150",
-                            expandedCourse === courseIndex 
+                            expandedCourse === originalIndex 
                               ? "bg-purple-100 dark:bg-purple-900/50" 
                               : "bg-slate-100 dark:bg-slate-700/50 group-hover:bg-slate-200 dark:group-hover:bg-slate-600/50"
                           )}>
-                            {expandedCourse === courseIndex 
+                            {expandedCourse === originalIndex 
                               ? <ChevronUp className="h-4 w-4 text-purple-600 dark:text-purple-400" /> 
                               : <ChevronDown className="h-4 w-4" />
                             }
@@ -1652,7 +1780,7 @@ function EditPageContent() {
                                 size="sm"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  removeCourse(courseIndex)
+                                  confirmDelete('course', originalIndex)
                                 }}
                                 className="h-8 w-8 p-0 rounded-lg text-red-600 hover:text-red-700 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/30 opacity-60 group-hover:opacity-100 transition-all duration-150"
                                 aria-label="Remove course"
@@ -1667,15 +1795,15 @@ function EditPageContent() {
                         </div>
                       </div>
                     </CardHeader>
-                    {expandedCourse === courseIndex && (
+                    {expandedCourse === originalIndex && (
                       <CardContent className="space-y-4 pt-0 pb-4 px-3 sm:px-4 animate-in slide-in-from-top-2 duration-200">
                         <Separator className="bg-gradient-to-r from-transparent via-slate-200 dark:via-slate-700 to-transparent" />
                         
                         {/* Course Basic Info */}
-                        <div className="bg-slate-50 dark:bg-slate-700/30 rounded-lg p-3 sm:p-4 space-y-3 sm:space-y-4 border border-slate-200 dark:border-slate-600/50">
-                          <h5 className="text-sm font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-2">
-                            <div className="p-1.5 rounded-lg bg-slate-200 dark:bg-slate-600/50">
-                              <Users className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+                        <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3 sm:p-4 space-y-3 sm:space-y-4 border-2 border-blue-200 dark:border-blue-800/50">
+                          <h5 className="text-sm font-bold text-blue-900 dark:text-blue-200 flex items-center gap-2">
+                            <div className="p-2 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-600 shadow-md">
+                              <Users className="h-4 w-4 text-white" />
                             </div>
                             Course Details
                           </h5>
@@ -1687,7 +1815,7 @@ function EditPageContent() {
                               <Input
                                 placeholder="e.g., Data Structures"
                                 value={course.title}
-                                onChange={(e) => updateCourse(courseIndex, "title", e.target.value)}
+                                onChange={(e) => updateCourse(originalIndex, "title", e.target.value)}
                                 className="h-9 sm:h-10 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                               />
                             </div>
@@ -1698,7 +1826,7 @@ function EditPageContent() {
                               <Input
                                 placeholder="e.g., CSE201"
                                 value={course.course_code}
-                                onChange={(e) => updateCourse(courseIndex, "course_code", e.target.value)}
+                                onChange={(e) => updateCourse(originalIndex, "course_code", e.target.value)}
                                 className="h-9 sm:h-10 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 font-mono"
                               />
                             </div>
@@ -1709,7 +1837,7 @@ function EditPageContent() {
                               <Input
                                 placeholder="e.g., Dr. John Doe"
                                 value={course.teacher_name}
-                                onChange={(e) => updateCourse(courseIndex, "teacher_name", e.target.value)}
+                                onChange={(e) => updateCourse(originalIndex, "teacher_name", e.target.value)}
                                 className="h-9 sm:h-10 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                               />
                             </div>
@@ -1719,7 +1847,7 @@ function EditPageContent() {
                                 placeholder="teacher@example.com"
                                 type="email"
                                 value={course.teacher_email}
-                                onChange={(e) => updateCourse(courseIndex, "teacher_email", e.target.value)}
+                                onChange={(e) => updateCourse(originalIndex, "teacher_email", e.target.value)}
                                 className="h-9 sm:h-10 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                               />
                             </div>
@@ -1730,7 +1858,7 @@ function EditPageContent() {
                                 min="1"
                                 max="6"
                                 value={course.credits}
-                                onChange={(e) => updateCourse(courseIndex, "credits", parseInt(e.target.value) || 3)}
+                                onChange={(e) => updateCourse(originalIndex, "credits", parseInt(e.target.value) || 3)}
                                 className="h-9 sm:h-10 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white"
                               />
                             </div>
@@ -1738,7 +1866,7 @@ function EditPageContent() {
                               <div className="flex items-center gap-3 bg-yellow-50 dark:bg-yellow-900/30 px-3 sm:px-4 py-2 rounded-lg border border-yellow-200 dark:border-yellow-700/50">
                                 <Switch
                                   checked={course.is_highlighted}
-                                  onCheckedChange={(checked) => updateCourse(courseIndex, "is_highlighted", checked)}
+                                  onCheckedChange={(checked) => updateCourse(originalIndex, "is_highlighted", checked)}
                                 />
                                 <Label className="flex items-center gap-2 cursor-pointer text-xs sm:text-sm text-yellow-700 dark:text-yellow-300">
                                   <Star className="h-4 w-4 text-yellow-500" />
@@ -1753,7 +1881,7 @@ function EditPageContent() {
                             <Textarea
                               placeholder="Course description..."
                               value={course.description}
-                              onChange={(e) => updateCourse(courseIndex, "description", e.target.value)}
+                              onChange={(e) => updateCourse(originalIndex, "description", e.target.value)}
                               rows={2}
                               className="resize-none rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                             />
@@ -1761,21 +1889,21 @@ function EditPageContent() {
                         </div>
 
                         {/* Topics Section */}
-                        <div className="space-y-4">
+                        <div className="space-y-4 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/20 dark:to-purple-950/20 rounded-lg p-4 border-2 border-indigo-200 dark:border-indigo-800">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <h4 className="font-semibold flex items-center gap-2 text-slate-900 dark:text-slate-200">
-                              <div className="p-1.5 rounded-md bg-purple-100 dark:bg-purple-900/50">
-                                <Layers className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                            <h4 className="text-lg font-bold flex items-center gap-2 text-indigo-900 dark:text-indigo-200">
+                              <div className="p-2 rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 shadow-md">
+                                <Layers className="h-5 w-5 text-white" />
                               </div>
                               Topics
-                              <Badge variant="secondary" className="ml-1 bg-purple-100 dark:bg-purple-900/50 border border-purple-200 dark:border-purple-700/50 text-purple-700 dark:text-purple-300">{course.topics?.length || 0}</Badge>
+                              <Badge className="ml-1 bg-indigo-600 text-white border-0">{course.topics?.length || 0}</Badge>
                             </h4>
                             <Button
-                              onClick={() => addTopic(courseIndex)}
+                              onClick={() => addTopic(originalIndex)}
                               size="sm"
-                              className="h-9 rounded-lg bg-purple-600 hover:bg-purple-700 text-white"
+                              className="h-9 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md"
                             >
-                              <Plus className="h-3.5 w-3.5 mr-1.5" />
+                              <Plus className="h-4 w-4 mr-1.5" />
                               Add Topic
                             </Button>
                           </div>
@@ -1784,10 +1912,10 @@ function EditPageContent() {
                             <DndContext
                               sensors={sensors}
                               collisionDetection={closestCenter}
-                              onDragEnd={(event) => handleDragEnd(event, courseIndex)}
+                              onDragEnd={(event) => handleDragEnd(event, originalIndex)}
                             >
                               <SortableContext
-                                items={course.topics.map((_, i) => `topic-${courseIndex}-${i}`)}
+                                items={course.topics.map((_, i) => `topic-${originalIndex}-${i}`)}
                                 strategy={verticalListSortingStrategy}
                               >
                                 <div className="space-y-3">
@@ -1796,38 +1924,38 @@ function EditPageContent() {
                                       key={topicIndex}
                                       topic={topic}
                                       topicIndex={topicIndex}
-                                      courseIndex={courseIndex}
+                                      courseIndex={originalIndex}
                                       isExpanded={
-                                        expandedTopic?.courseIndex === courseIndex &&
+                                        expandedTopic?.courseIndex === originalIndex &&
                                         expandedTopic?.topicIndex === topicIndex
                                       }
                                       onToggle={() => {
                                         if (
-                                          expandedTopic?.courseIndex === courseIndex &&
+                                          expandedTopic?.courseIndex === originalIndex &&
                                           expandedTopic?.topicIndex === topicIndex
                                         ) {
                                           setExpandedTopic(null)
                                         } else {
-                                          setExpandedTopic({ courseIndex, topicIndex })
+                                          setExpandedTopic({ courseIndex: originalIndex, topicIndex })
                                         }
                                       }}
-                                      onRemove={() => removeTopic(courseIndex, topicIndex)}
+                                      onRemove={() => removeTopic(originalIndex, topicIndex)}
                                       onUpdate={(field: string, value: any) =>
-                                        updateTopic(courseIndex, topicIndex, field as keyof TopicData, value)
+                                        updateTopic(originalIndex, topicIndex, field as keyof TopicData, value)
                                       }
-                                      onAddSlide={() => addSlide(courseIndex, topicIndex)}
+                                      onAddSlide={() => addSlide(originalIndex, topicIndex)}
                                       onRemoveSlide={(slideIndex: number) =>
-                                        removeSlide(courseIndex, topicIndex, slideIndex)
+                                        removeSlide(originalIndex, topicIndex, slideIndex)
                                       }
                                       onUpdateSlide={(slideIndex: number, field: string, value: string) =>
-                                        updateSlide(courseIndex, topicIndex, slideIndex, field, value)
+                                        updateSlide(originalIndex, topicIndex, slideIndex, field, value)
                                       }
-                                      onAddVideo={() => addVideo(courseIndex, topicIndex)}
+                                      onAddVideo={() => addVideo(originalIndex, topicIndex)}
                                       onRemoveVideo={(videoIndex: number) =>
-                                        removeVideo(courseIndex, topicIndex, videoIndex)
+                                        removeVideo(originalIndex, topicIndex, videoIndex)
                                       }
                                       onUpdateVideo={(videoIndex: number, field: string, value: string) =>
-                                        updateVideo(courseIndex, topicIndex, videoIndex, field, value)
+                                        updateVideo(originalIndex, topicIndex, videoIndex, field, value)
                                       }
                                     />
                                   ))}
@@ -1850,7 +1978,7 @@ function EditPageContent() {
                               <Badge variant="secondary" className="ml-1 bg-blue-100 dark:bg-blue-900/50 border border-blue-200 dark:border-blue-700/50 text-blue-700 dark:text-blue-300">{course.studyTools?.length || 0}</Badge>
                             </h4>
                             <Button
-                              onClick={() => addStudyTool(courseIndex)}
+                              onClick={() => addStudyTool(originalIndex)}
                               size="sm"
                               className="h-9 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
                             >
@@ -1866,7 +1994,7 @@ function EditPageContent() {
                               </div>
                               <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">No study tools added</p>
                               <Button 
-                                onClick={() => addStudyTool(courseIndex)} 
+                                onClick={() => addStudyTool(originalIndex)} 
                                 size="sm" 
                                 className="h-9 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
                               >
@@ -1878,10 +2006,10 @@ function EditPageContent() {
                             <DndContext
                               sensors={sensors}
                               collisionDetection={closestCenter}
-                              onDragEnd={(event: DragEndEvent) => handleStudyToolDragEnd(event, courseIndex)}
+                              onDragEnd={(event: DragEndEvent) => handleStudyToolDragEnd(event, originalIndex)}
                             >
                               <SortableContext
-                                items={course.studyTools?.map((_, idx) => `studytool-${courseIndex}-${idx}`) || []}
+                                items={course.studyTools?.map((_, idx) => `studytool-${originalIndex}-${idx}`) || []}
                                 strategy={verticalListSortingStrategy}
                               >
                                 <div className="space-y-2">
@@ -1890,24 +2018,24 @@ function EditPageContent() {
                                       key={toolIndex}
                                       tool={tool}
                                       toolIndex={toolIndex}
-                                      courseIndex={courseIndex}
+                                      courseIndex={originalIndex}
                                       isExpanded={
-                                        expandedStudyTool?.courseIndex === courseIndex &&
+                                        expandedStudyTool?.courseIndex === originalIndex &&
                                         expandedStudyTool?.toolIndex === toolIndex
                                       }
                                       onToggle={() => {
                                         if (
-                                          expandedStudyTool?.courseIndex === courseIndex &&
+                                          expandedStudyTool?.courseIndex === originalIndex &&
                                           expandedStudyTool?.toolIndex === toolIndex
                                         ) {
                                           setExpandedStudyTool(null)
                                         } else {
-                                          setExpandedStudyTool({ courseIndex, toolIndex })
+                                          setExpandedStudyTool({ courseIndex: originalIndex, toolIndex })
                                         }
                                       }}
-                                      onRemove={() => removeStudyTool(courseIndex, toolIndex)}
+                                      onRemove={() => removeStudyTool(originalIndex, toolIndex)}
                                       onUpdate={(field: string, value: any) => 
-                                        updateStudyTool(courseIndex, toolIndex, field as keyof StudyToolData, value)
+                                        updateStudyTool(originalIndex, toolIndex, field as keyof StudyToolData, value)
                                       }
                                     />
                                   ))}
@@ -1926,57 +2054,97 @@ function EditPageContent() {
         </Card>
           </div>
 
-        {/* Action Bar */}
-        <div className="mt-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3 sm:p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Button
-              variant="outline"
-              onClick={() => router.push('/dashboard/create/bulk')}
-              className="flex-1 sm:flex-none"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Cancel
-            </Button>
-            
-            {hasUnsavedChanges && (
+        {/* Sticky Action Bar */}
+        <div className="sticky bottom-0 z-30 mt-6 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 shadow-lg">
+          <div className="p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <Button
-                variant="ghost"
-                onClick={loadSemesterData}
-                className="text-orange-600 dark:text-orange-400 flex-1 sm:flex-none"
+                variant="outline"
+                onClick={() => router.push('/dashboard/create/bulk')}
+                className="flex-1 sm:flex-none"
               >
-                <Undo2 className="h-4 w-4 mr-2" />
-                Reset
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Cancel
               </Button>
-            )}
-          </div>
-          
-          <div className="flex items-center justify-between sm:justify-end gap-3">
-            {lastSaved && (
-              <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:inline">
-                Saved {lastSaved.toLocaleTimeString()}
-              </span>
-            )}
-            
-            <Button
-              onClick={handleSubmit}
-              disabled={isUpdating || !formData.semester.title || !formData.semester.section || formData.courses.length === 0}
-              className="w-full sm:w-auto"
-            >
-              {isUpdating ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Updating...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4 mr-2" />
-                  Update Semester
-                </>
+              
+              {hasUnsavedChanges && (
+                <Button
+                  variant="ghost"
+                  onClick={loadSemesterData}
+                  className="text-orange-600 dark:text-orange-400 flex-1 sm:flex-none"
+                >
+                  <Undo2 className="h-4 w-4 mr-2" />
+                  Reset
+                </Button>
               )}
-            </Button>
+            </div>
+            
+            <div className="flex items-center justify-between sm:justify-end gap-3">
+              {lastSaved && (
+                <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:inline">
+                  Saved {lastSaved.toLocaleTimeString()}
+                </span>
+              )}
+              
+              <Button
+                onClick={handleSubmit}
+                disabled={isUpdating || !formData.semester.title || !formData.semester.section || formData.courses.length === 0}
+                size="lg"
+                className="w-full sm:w-auto bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 shadow-lg"
+              >
+                {isUpdating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Update Semester
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
-        </div>
+        
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                <AlertTriangle className="h-5 w-5" />
+                Confirm Deletion
+              </DialogTitle>
+              <DialogDescription>
+                {itemToDelete?.type === 'course' && "Are you sure you want to delete this course? This will remove all topics, slides, videos, and study tools associated with it."}
+                {itemToDelete?.type === 'topic' && "Are you sure you want to delete this topic? This will remove all slides and videos in this topic."}
+                {itemToDelete?.type === 'tool' && "Are you sure you want to delete this study tool?"}
+                <br /><br />
+                <strong className="text-red-600 dark:text-red-400">This action cannot be undone.</strong>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setDeleteConfirmOpen(false)
+                  setItemToDelete(null)
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleConfirmDelete}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </TooltipProvider>
   )
