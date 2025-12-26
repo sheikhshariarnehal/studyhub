@@ -54,6 +54,11 @@ export default function HomePage() {
       if (process.env.NODE_ENV === 'development') {
         console.log("📍 No user found after auth check, redirecting to login")
       }
+      // Save current URL to return after login
+      const currentPath = window.location.pathname + window.location.search
+      if (currentPath !== '/') {
+        sessionStorage.setItem('returnUrl', currentPath)
+      }
       router.push("/login")
     }
   }, [user, authLoading, router])

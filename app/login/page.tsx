@@ -98,7 +98,15 @@ export default function LoginPage() {
           })
           const data = await response.json()
           const adminRoles = ['super_admin', 'admin', 'moderator', 'content_creator', 'section_admin']
-          const redirectUrl = adminRoles.includes(data.user?.role) ? "/admin" : "/"
+          const defaultUrl = adminRoles.includes(data.user?.role) ? "/admin" : "/"
+          
+          // Check if there's a return URL saved
+          const returnUrl = sessionStorage.getItem('returnUrl')
+          const redirectUrl = returnUrl || defaultUrl
+          if (returnUrl) {
+            sessionStorage.removeItem('returnUrl')
+          }
+          
           console.log("📍 Redirecting to:", redirectUrl)
           // Use window.location for hard redirect to ensure clean state
           window.location.href = redirectUrl
@@ -154,8 +162,15 @@ export default function LoginPage() {
           console.log("✅ Student login successful, redirecting...")
           // Wait a moment to ensure cookie is set
           await new Promise(resolve => setTimeout(resolve, 500))
-          // Use window.location for hard redirect to ensure clean state
-          window.location.href = "/"
+          // Check if there's a return URL saved
+          const returnUrl = sessionStorage.getItem('returnUrl')
+          if (returnUrl) {
+            sessionStorage.removeItem('returnUrl')
+            window.location.href = returnUrl
+          } else {
+            // Use window.location for hard redirect to ensure clean state
+            window.location.href = "/"
+          }
         } else {
           console.error("❌ Student login failed:", result.error)
           setError(result.error || "Login failed")
