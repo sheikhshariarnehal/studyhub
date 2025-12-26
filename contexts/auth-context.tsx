@@ -6,12 +6,16 @@ export interface AdminUser {
   id: string
   email: string
   full_name: string
-  role: "super_admin" | "admin" | "moderator" | "content_creator" | "section_admin" | "contributor"
-  department?: string
+  role: "super_admin" | "admin" | "moderator" | "content_creator" | "section_admin" | "contributor" | "student"
+  department?: string | any
+  batch?: any
+  department_id?: string
+  batch_id?: string
   phone?: string
-  is_active: boolean
+  student_id?: string
+  is_active?: boolean
   is_approved?: boolean
-  last_login: string | null
+  last_login?: string | null
   created_at: string
   updated_at: string
 }
@@ -20,6 +24,8 @@ interface AuthContextType {
   user: AdminUser | null
   loading: boolean
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
+  studentLogin: (email: string, departmentId: string, batchId: string, fullName?: string) => Promise<{ success: boolean; error?: string }>
+  updateStudentContext: (departmentId: string, batchId: string) => Promise<{ success: boolean; error?: string }>
   logout: () => Promise<void>
   checkAuth: () => Promise<void>
 }
@@ -32,9 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const checkAuth = async () => {
     try {
-      if (process.env.NODE_ENV === 'development') {
-        console.log("🔍 Checking authentication...")
-      }
+      console.log("🔍 Checking authentication...")
       
       // Add timeout for production
       const controller = new AbortController()
@@ -52,24 +56,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       clearTimeout(timeoutId)
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log("📊 Auth check response status:", response.status)
-      }
+      console.log("📊 Auth check response status:", response.status)
 
       if (response.ok) {
         const data = await response.json()
-        if (process.env.NODE_ENV === 'development') {
-          console.log("📊 Auth check response data:", data)
-        }
+        console.log("📊 Auth check response data:", data)
         if (data.success) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log("✅ User authenticated:", data.user.email)
-          }
+          console.log("✅ User authenticated:", data.user.email, "Role:", data.user.role)
           setUser(data.user)
         } else {
-          if (process.env.NODE_ENV === 'development') {
-            console.log("❌ Auth check failed:", data.error)
-          }
+          console.log("❌ Auth check failed:", data.error)
           setUser(null)
         }
       } else {
@@ -135,7 +131,74 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const studentLogin = async (email: string, departmentId: string, batchId: string, fullName?: string) => {
+    try {
+      console.log("🔍 AuthContext student login for:", email)
+      const response = await fetch("/api/auth/student-login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        cache: 'no-store',
+        body: JSON.stringify({ email, department_id: departmentId, batch_id: batchId, full_name: fullName }),
+      })
+
+      const data = await response.json()
+      console.log("📊 AuthContext student login response:", data)
+
+      if (data.success) {
+        console.log("✅ AuthContext student login successful, user:", data.user)
+        console.log("✅ Cookie should be set, ready for redirect")
+        setUser(data.user)
+        return { success: true }
+      } else {
+        console.log("❌ AuthContext student login failed:", data.error)
+        return { success: false, error: data.error }
+      }
+    } catch (error) {
+      console.error("❌ AuthContext student login error:", error)
+      return { success: false, error: "Network error occurred" }
+    }
+  }
+
+  const updateStudentContext = async (departmentId: string, batchId: string) => {
+    if (!user || user.role !== "student") {
+      return { success: false, error: "Not a student user" }
+    }
+
+    try {
+      const response = await fetch("/api/auth/student-login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        cache: 'no-store',
+        body: JSON.stringify({ 
+          email: user.email, 
+          department_id: departmentId, 
+          batch_id: batchId,
+          full_name: user.full_name
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setUser(data.user)
+        return { success: true }
+      } else {
+        return { success: false, error: data.error }
+      }
+    } catch (error) {
+      console.error("❌ Update student context error:", error)
+      return { success: false, error: "Network error occurred" }
+    }
+  }
+
   useEffect(() => {
+    console.log("🚀 AuthContext mounted, checking auth...")
     checkAuth()
   }, [])
 
@@ -143,6 +206,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     loading,
     login,
+    studentLogin,
+    updateStudentContext,
     logout,
     checkAuth,
   }

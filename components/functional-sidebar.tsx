@@ -354,14 +354,21 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
       setError(null)
 
       const data = await getCachedData(`courses-${semesterId}`, async () => {
-        const { data, error } = await supabase
-          .from("courses")
-          .select("*")
-          .eq("semester_id", semesterId)
-          .order("is_highlighted", { ascending: false }) // Highlighted courses first
-          .order("created_at", { ascending: true })
-        if (error) throw error
-        return data || []
+        // Check if we need to filter by department/batch from auth context
+        let url = `/api/courses?semester_id=${semesterId}`
+        
+        // For students, the API will automatically filter by their department/batch
+        // We're using the API endpoint instead of direct Supabase to leverage auth filtering
+        const response = await fetch(url, {
+          credentials: 'include'
+        })
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch courses')
+        }
+        
+        const result = await response.json()
+        return result.courses || []
       })
 
       setCourses(data)

@@ -191,19 +191,29 @@ export function Header({ className }: HeaderProps) {
 
                   {/* Profile Dropdown Menu */}
                   {isProfileOpen && (
-                    <div className="absolute right-0 mt-3 w-60 bg-background border border-border/50 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="absolute right-0 mt-3 w-64 bg-background border border-border/50 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                       <div className="p-4 border-b border-border/50 bg-gradient-to-br from-primary/5 to-transparent">
                         <p className="font-semibold text-base">{user.full_name || 'User'}</p>
                         <p className="text-xs text-muted-foreground mt-1">{user.email}</p>
                         <span className="inline-block mt-2 px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary rounded-full capitalize">
                           {user.role?.replace('_', ' ') || 'User'}
                         </span>
+                        {user.role === "student" && user.department && user.batch && (
+                          <div className="mt-2 pt-2 border-t border-border/30 space-y-1">
+                            <p className="text-[10px] text-muted-foreground">
+                              <span className="font-medium">Department:</span> {user.department.short_name || user.department.name}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              <span className="font-medium">Batch:</span> {user.batch.batch_name}
+                            </p>
+                          </div>
+                        )}
                       </div>
                       <div className="py-2 px-2">
                         <button
                           className="w-full px-3 py-2.5 text-left text-sm hover:bg-accent/60 rounded-lg transition-all duration-200 flex items-center gap-3 font-medium"
                           onClick={() => {
-                            handleNavigation("/profile")
+                            handleNavigation(user.role === "student" ? "/student-profile" : "/profile")
                             setIsProfileOpen(false)
                           }}
                         >
@@ -212,18 +222,20 @@ export function Header({ className }: HeaderProps) {
                           </div>
                           <span>My Profile</span>
                         </button>
-                        <button
-                          className="w-full px-3 py-2.5 text-left text-sm hover:bg-accent/60 rounded-lg transition-all duration-200 flex items-center gap-3 font-medium"
-                          onClick={() => {
-                            handleNavigation("/dashboard")
-                            setIsProfileOpen(false)
-                          }}
-                        >
-                          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                            <Settings className="h-4 w-4 text-primary" />
-                          </div>
-                          <span>Dashboard</span>
-                        </button>
+                        {user.role !== "student" && (
+                          <button
+                            className="w-full px-3 py-2.5 text-left text-sm hover:bg-accent/60 rounded-lg transition-all duration-200 flex items-center gap-3 font-medium"
+                            onClick={() => {
+                              handleNavigation("/dashboard")
+                              setIsProfileOpen(false)
+                            }}
+                          >
+                            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                              <Settings className="h-4 w-4 text-primary" />
+                            </div>
+                            <span>Dashboard</span>
+                          </button>
+                        )}
                       </div>
                       <div className="border-t border-border/50 p-2">
                         <button

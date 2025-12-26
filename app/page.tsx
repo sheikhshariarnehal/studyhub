@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Download, Maximize } from "lucide-react"
+import { Download, Maximize, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { FunctionalSidebar } from "@/components/functional-sidebar"
@@ -13,6 +13,7 @@ import { performanceMonitor, measureAsync } from "@/lib/performance"
 import { useToast } from "@/hooks/use-toast"
 import { Toaster } from "@/components/ui/toaster"
 import { useIsMobile } from "@/components/ui/use-mobile"
+import { useAuth } from "@/contexts/auth-context"
 
 import { trackContentEvent, trackDownloadEvent, trackError } from "@/lib/analytics"
 import { generateSimpleShareUrl, parseSimpleShareUrl, updateUrlWithoutNavigation } from "@/lib/simple-share-utils"
@@ -40,11 +41,20 @@ export default function HomePage() {
   const [mounted, setMounted] = useState(false)
   const { toast } = useToast()
   const isMobile = useIsMobile()
+  const { user, loading: authLoading } = useAuth()
 
   const router = useRouter()
 
   // Fallback loading state for compatibility
   const [fallbackLoading, setFallbackLoading] = useState(false)
+
+  // Redirect to login if not authenticated (wait for auth to complete)
+  useEffect(() => {
+    if (!authLoading && !user) {
+      console.log("📍 No user found after auth check, redirecting to login")
+      router.push("/login")
+    }
+  }, [user, authLoading, router])
 
   // Use optimized content loading
   const {
@@ -466,6 +476,35 @@ export default function HomePage() {
 
   if (!mounted) {
     return null // Prevent hydration mismatch
+  }
+
+  // Show loading screen while checking authentication
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          <p className="text-muted-foreground text-sm">Checking authentication...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show loading spinner during auth check
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't render content if not authenticated (will redirect in useEffect)
+  if (!user) {
+    return null
   }
 
   return (

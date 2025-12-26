@@ -24,19 +24,56 @@ export interface ContentFilter {
 
 // Helper function to get authenticated user from request
 export async function getAuthUser(request: NextRequest): Promise<AuthUser | null> {
-  const token = request.cookies.get("admin_token")?.value
+  // Check for student token first (auth-token), then admin token
+  const token = request.cookies.get("auth-token")?.value || request.cookies.get("admin_token")?.value
   
   if (!token) {
-    console.log("[getAuthUser] No admin_token cookie found")
+    console.log("[getAuthUser] No auth token cookie found")
     return null
   }
 
   try {
     console.log("[getAuthUser] Verifying token with JWT_SECRET...")
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string }
-    console.log("[getAuthUser] Token decoded, userId:", decoded.userId)
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; role?: string }
+    console.log("[getAuthUser] Token decoded, userId:", decoded.userId, "role:", decoded.role)
     const supabase = createClient()
 
+    // Check if this is a student user
+    if (decoded.role === "student") {
+      const { data: student, error } = await supabase
+        .from("students")
+        .select(`
+          id, 
+          email, 
+          full_name,
+          department_id,
+          batch_id,
+          departments:department_id (id, name, short_name),
+          batches:batch_id (id, batch_name, batch_number)
+        `)
+        .eq("id", decoded.userId)
+        .single()
+
+      if (error || !student) {
+        console.log("[getAuthUser] Student query failed:", error)
+        return null
+      }
+
+      console.log("[getAuthUser] Student found:", student.email)
+      return {
+        id: student.id,
+        email: student.email,
+        full_name: student.full_name || '',
+        role: "student",
+        is_approved: true, // Students are auto-approved
+        department_id: student.department_id,
+        batch_id: student.batch_id,
+        department: student.departments as AuthUser['department'],
+        batch: student.batches as AuthUser['batch'],
+      }
+    }
+
+    // Admin user lookup
     const { data: user, error } = await supabase
       .from("admin_users")
       .select(`
@@ -88,6 +125,11 @@ export function isContributor(user: AuthUser): boolean {
   return user.role === "contributor"
 }
 
+// Check if user is a student (limited access)
+export function isStudent(user: AuthUser): boolean {
+  return user.role === "student"
+}
+
 // Check if user can access all content (not just their own)
 export function canAccessAllContent(user: AuthUser): boolean {
   return isAdmin(user)
@@ -105,6 +147,15 @@ export function getContentFilterForUser(
       department_id: viewDepartmentId || null,
       batch_id: viewBatchId || null,
       excludeNullDeptBatch: false,
+    }
+  }
+
+  // Students are restricted to their assigned department/batch
+  if (isStudent(user)) {
+    return {
+      department_id: user.department_id || null,
+      batch_id: user.batch_id || null,
+      excludeNullDeptBatch: true, // Students only see content for their department/batch
     }
   }
 

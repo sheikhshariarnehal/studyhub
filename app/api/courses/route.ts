@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
-import { getAuthUser, isContributor, isAdmin, getContentFilterForUser, canManageContent } from "@/lib/auth-utils"
+import { getAuthUser, isContributor, isAdmin, isStudent, getContentFilterForUser, canManageContent } from "@/lib/auth-utils"
 
 /**
  * GET /api/courses
@@ -50,8 +50,8 @@ export async function GET(request: NextRequest) {
       `)
       .order("course_code", { ascending: true })
 
-    // Apply department/batch filtering for contributors
-    if (user && isContributor(user)) {
+    // Apply department/batch filtering for students and contributors
+    if (user && (isStudent(user) || isContributor(user))) {
       const contentFilter = getContentFilterForUser(user, viewDepartmentId, viewBatchId)
       
       // Filter by department if specified
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
         query = query.eq('batch_id', contentFilter.batch_id)
       }
       
-      // Exclude content without department/batch for contributors
+      // Exclude content without department/batch for students and contributors
       if (contentFilter.excludeNullDeptBatch) {
         query = query.not('department_id', 'is', null).not('batch_id', 'is', null)
       }

@@ -10,7 +10,7 @@ export const revalidate = 0
 
 export async function GET(request: NextRequest) {
   try {
-    const token = request.cookies.get("admin_token")?.value
+    const token = request.cookies.get("auth-token")?.value || request.cookies.get("admin_token")?.value
 
     if (!token) {
       return NextResponse.json(
@@ -32,7 +32,101 @@ export async function GET(request: NextRequest) {
 
     const supabase = createClient()
 
-    // Get current user data
+    // Check if this is a student or admin user
+    const isStudent = decoded.role === "student"
+
+    if (isStudent) {
+      // Get student data
+      const { data: student, error: studentError } = await supabase
+        .from("students")
+        .select(`
+          id, 
+          email, 
+          full_name, 
+          student_id, 
+          phone, 
+          department_id, 
+          batch_id,
+          created_at,
+          updated_at
+        `)
+        .eq("id", decoded.userId)
+        .single()
+
+      if (studentError) {
+        console.error("❌ Student query error:", studentError)
+        return NextResponse.json(
+          { success: false, error: "Student not found", details: studentError.message },
+          { status: 401 }
+        )
+      }
+
+      if (!student) {
+        console.error("❌ Student not found for ID:", decoded.userId)
+        return NextResponse.json(
+          { success: false, error: "Student not found" },
+          { status: 401 }
+        )
+      }
+
+      // Fetch department and batch separately
+      const { data: department } = await supabase
+        .from("departments")
+        .select("id, name, short_name")
+        .eq("id", student.department_id)
+        .single()
+
+      const { data: batch } = await supabase
+        .from("batches")
+        .select("id, batch_name, batch_number")
+        .eq("id", student.batch_id)
+        .single()
+
+      // Check session validity
+      const { data: session } = await supabase
+        .from("student_sessions")
+        .select("expires_at, is_active")
+        .eq("student_id", decoded.userId)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single()
+
+      if (session) {
+        const now = new Date()
+        const expiresAt = new Date(session.expires_at)
+        
+        if (now > expiresAt) {
+          await supabase
+            .from("student_sessions")
+            .update({ is_active: false })
+            .eq("student_id", decoded.userId)
+
+          return NextResponse.json(
+            { success: false, error: "Session expired" },
+            { status: 401 }
+          )
+        }
+      }
+
+      const response = NextResponse.json({
+        success: true,
+        user: {
+          ...student,
+          role: "student",
+          department: department || null,
+          batch: batch || null
+        }
+      })
+
+      response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+      response.headers.set('Pragma', 'no-cache')
+      response.headers.set('Expires', '0')
+
+      return response
+    }
+
+    // Get admin user data
     const { data: adminUser, error: userError } = await supabase
       .from("admin_users")
       .select("id, email, full_name, role, department, phone, is_active, is_approved, last_login, created_at, updated_at")
