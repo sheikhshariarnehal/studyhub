@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useRef, useCallback, memo, useMemo } from "react"
+import React, { useState, useEffect, useRef, useCallback, memo, useMemo, startTransition } from "react"
 import {
   Loader2, AlertCircle, FileText, Play, BookOpen, ExternalLink, Maximize2, RotateCcw,
   ZoomIn, ZoomOut, RotateCw, Volume2, VolumeX, Settings, Share2, Bookmark,
@@ -10,6 +10,74 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useIsMobile } from "@/components/ui/use-mobile"
+
+// ============================================================================
+// PERFORMANCE OPTIMIZATIONS
+// ============================================================================
+
+// Video embed URL cache to prevent recalculations
+const embedUrlCache = new Map<string, string>()
+const EMBED_CACHE_TTL = 30 * 60 * 1000 // 30 minutes
+
+interface CachedEmbedUrl {
+  url: string
+  timestamp: number
+}
+
+const embedUrlCacheStore = new Map<string, CachedEmbedUrl>()
+
+// Get cached embed URL or compute it
+const getCachedEmbedUrl = (originalUrl: string, type: string, origin: string): string | null => {
+  const cacheKey = `${type}:${originalUrl}`
+  const cached = embedUrlCacheStore.get(cacheKey)
+  
+  if (cached && Date.now() - cached.timestamp < EMBED_CACHE_TTL) {
+    return cached.url
+  }
+  
+  embedUrlCacheStore.delete(cacheKey)
+  return null
+}
+
+const setCachedEmbedUrl = (originalUrl: string, type: string, embedUrl: string) => {
+  const cacheKey = `${type}:${originalUrl}`
+  embedUrlCacheStore.set(cacheKey, {
+    url: embedUrl,
+    timestamp: Date.now()
+  })
+}
+
+// Preload video thumbnail for faster perceived loading
+const preloadYouTubeThumbnail = (videoId: string) => {
+  const img = new Image()
+  img.src = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`
+  // Also preload fallback
+  const fallbackImg = new Image()
+  fallbackImg.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+}
+
+// Preload iframe hint for browsers that support it
+const preconnectYouTube = () => {
+  if (typeof document === 'undefined') return
+  
+  const existingPreconnect = document.querySelector('link[href="https://www.youtube.com"]')
+  if (!existingPreconnect) {
+    const link = document.createElement('link')
+    link.rel = 'preconnect'
+    link.href = 'https://www.youtube.com'
+    document.head.appendChild(link)
+    
+    const link2 = document.createElement('link')
+    link2.rel = 'preconnect'
+    link2.href = 'https://i.ytimg.com'
+    document.head.appendChild(link2)
+  }
+}
+
+// Initialize preconnect on module load
+if (typeof window !== 'undefined') {
+  preconnectYouTube()
+}
 
 interface ContentItem {
   type: "slide" | "video" | "document" | "syllabus" | "study-tool"
@@ -33,6 +101,71 @@ interface ContentViewerProps {
   content: ContentItem
   isLoading?: boolean
 }
+
+// ============================================================================
+// VIDEO THUMBNAIL PLACEHOLDER - Shows while video loads
+// ============================================================================
+
+const VideoThumbnailPlaceholder = memo(({ url, title }: { url: string; title: string }) => {
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
+  const [thumbnailError, setThumbnailError] = useState(false)
+  
+  useEffect(() => {
+    // Extract video ID
+    let videoId = ""
+    if (url.includes("youtube.com/watch?v=")) {
+      videoId = url.split("v=")[1]?.split("&")[0]
+    } else if (url.includes("youtu.be/")) {
+      videoId = url.split("youtu.be/")[1]?.split("?")[0]
+    } else if (url.includes("youtube.com/embed/")) {
+      videoId = url.split("embed/")[1]?.split("?")[0]
+    }
+    
+    if (videoId) {
+      // Try maxresdefault first, fall back to hqdefault
+      setThumbnailUrl(`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`)
+    }
+  }, [url])
+  
+  const handleThumbnailError = useCallback(() => {
+    if (thumbnailUrl?.includes('maxresdefault')) {
+      // Fallback to hqdefault
+      const videoId = thumbnailUrl.split('/vi/')[1]?.split('/')[0]
+      if (videoId) {
+        setThumbnailUrl(`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`)
+        return
+      }
+    }
+    setThumbnailError(true)
+  }, [thumbnailUrl])
+  
+  if (thumbnailError || !thumbnailUrl) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4">
+        <Play className="h-16 w-16 text-white/80" />
+        <p className="text-white/60 text-sm text-center px-4 max-w-xs">{title}</p>
+      </div>
+    )
+  }
+  
+  return (
+    <div className="relative w-full h-full">
+      <img
+        src={thumbnailUrl}
+        alt={title}
+        className="w-full h-full object-cover"
+        onError={handleThumbnailError}
+      />
+      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+        <div className="bg-red-600 rounded-full p-4 shadow-lg animate-pulse">
+          <Play className="h-8 w-8 text-white fill-white" />
+        </div>
+      </div>
+    </div>
+  )
+})
+
+VideoThumbnailPlaceholder.displayName = "VideoThumbnailPlaceholder"
 
 const ContentViewerComponent = function ContentViewer({ content, isLoading = false }: ContentViewerProps) {
   const [iframeLoading, setIframeLoading] = useState(true)
@@ -83,12 +216,15 @@ const ContentViewerComponent = function ContentViewer({ content, isLoading = fal
       setIframeLoading(false)
     }
 
-    setIframeError(false)
-    setZoomLevel(100)
-    setIsRotated(0)
-    setViewTime(0)
+    // Use startTransition for non-urgent state updates
+    startTransition(() => {
+      setIframeError(false)
+      setZoomLevel(100)
+      setIsRotated(0)
+      setViewTime(0)
+    })
 
-    // Start view time tracking
+    // Start view time tracking with reduced frequency
     viewTimeRef.current = setInterval(() => {
       setViewTime(prev => prev + 1)
     }, 1000)
@@ -375,8 +511,16 @@ const ContentViewerComponent = function ContentViewer({ content, isLoading = fal
     }
   }
 
-  // Fix YouTube URL format and Google Drive URLs
-  const getEmbedUrl = (url: string, type: string) => {
+  // Memoized embed URL computation with caching
+  const getEmbedUrl = useCallback((url: string, type: string): string => {
+    const origin = typeof window !== "undefined" ? window.location.origin : ""
+    
+    // Check cache first
+    const cachedUrl = getCachedEmbedUrl(url, type, origin)
+    if (cachedUrl) return cachedUrl
+    
+    let embedUrl = url
+    
     if (type === "video") {
       // Handle various YouTube URL formats
       let videoId = ""
@@ -392,6 +536,9 @@ const ContentViewerComponent = function ContentViewer({ content, isLoading = fal
       }
 
       if (videoId) {
+        // Preload thumbnail for perceived performance
+        preloadYouTubeThumbnail(videoId)
+        
         // Return proper embed URL with parameters to keep users in the app
         // rel=0: Only show related videos from the same channel
         // modestbranding=1: Minimize YouTube branding
@@ -399,14 +546,17 @@ const ContentViewerComponent = function ContentViewer({ content, isLoading = fal
         // disablekb=0: Enable keyboard controls
         // iv_load_policy=3: Disable video annotations
         // enablejsapi=1: Enable JavaScript API for control
-        return `https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${typeof window !== "undefined" ? window.location.origin : ""}&rel=0&modestbranding=1&fs=1&disablekb=0&iv_load_policy=3`
-      }
-
-      // If it's already an embed URL, ensure it has proper parameters
-      if (url.includes("youtube.com/embed/")) {
+        // playsinline=1: Better mobile experience
+        // autoplay=0: Don't autoplay for better UX
+        embedUrl = `https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${origin}&rel=0&modestbranding=1&fs=1&disablekb=0&iv_load_policy=3&playsinline=1&autoplay=0`
+      } else if (url.includes("youtube.com/embed/")) {
+        // If it's already an embed URL, ensure it has proper parameters
         const baseUrl = url.split("?")[0]
         const videoIdMatch = baseUrl.split("embed/")[1]
-        return `https://www.youtube.com/embed/${videoIdMatch}?enablejsapi=1&origin=${typeof window !== "undefined" ? window.location.origin : ""}&rel=0&modestbranding=1&fs=1&disablekb=0&iv_load_policy=3`
+        if (videoIdMatch) {
+          preloadYouTubeThumbnail(videoIdMatch)
+        }
+        embedUrl = `https://www.youtube.com/embed/${videoIdMatch}?enablejsapi=1&origin=${origin}&rel=0&modestbranding=1&fs=1&disablekb=0&iv_load_policy=3&playsinline=1&autoplay=0`
       }
     } else if (type === "slide" || type === "document" || type === "study-tool") {
       // Handle Google Drive URLs for documents, slides, and study tools
@@ -431,12 +581,14 @@ const ContentViewerComponent = function ContentViewer({ content, isLoading = fal
 
       if (fileId) {
         // Return Google Drive embed URL for preview
-        return `https://drive.google.com/file/d/${fileId}/preview`
+        embedUrl = `https://drive.google.com/file/d/${fileId}/preview`
       }
     }
-
-    return url
-  }
+    
+    // Cache the result
+    setCachedEmbedUrl(url, type, embedUrl)
+    return embedUrl
+  }, [])
 
   const openInNewTab = () => {
     if (content.type === "video") {
@@ -917,22 +1069,32 @@ const ContentViewerComponent = function ContentViewer({ content, isLoading = fal
             </div>
           </div>
         ) : content.type === "video" ? (
-          <iframe
-            ref={iframeRef}
-            src={embedUrl}
-            className={`
-              w-full h-full border-0 bg-black
-              ${isMobile ? 'touch-manipulation' : ''}
-            `}
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-            sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"
-            allowFullScreen
-            title={content.title}
-            onLoad={handleIframeLoad}
-            onError={handleIframeError}
-            referrerPolicy="strict-origin-when-cross-origin"
-            loading="lazy"
-          />
+          <>
+            {/* Video thumbnail placeholder for faster perceived loading */}
+            {iframeLoading && (
+              <div className="absolute inset-0 bg-black flex items-center justify-center z-5">
+                <VideoThumbnailPlaceholder url={content.url} title={content.title} />
+              </div>
+            )}
+            <iframe
+              ref={iframeRef}
+              src={embedUrl}
+              className={`
+                w-full h-full border-0 bg-black
+                ${isMobile ? 'touch-manipulation' : ''}
+                ${iframeLoading ? 'opacity-0' : 'opacity-100 transition-opacity duration-300'}
+              `}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"
+              allowFullScreen
+              title={content.title}
+              onLoad={handleIframeLoad}
+              onError={handleIframeError}
+              referrerPolicy="strict-origin-when-cross-origin"
+              loading="eager"
+              importance="high"
+            />
+          </>
         ) : (
           <iframe
             ref={iframeRef}

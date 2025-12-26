@@ -1,7 +1,7 @@
 "use client"
 
-import { memo, useState, useCallback, useEffect } from "react"
-import { Play, FileText, ExternalLink, Download } from "lucide-react"
+import { memo, useState, useCallback, useEffect, useRef, useMemo } from "react"
+import { Play, FileText, ExternalLink, Download, Clock, Eye } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -30,15 +30,18 @@ interface ContentItemCache {
 }
 
 // ============================================================================
-// CACHING SYSTEM
+// CACHING SYSTEM WITH LRU EVICTION
 // ============================================================================
 
-// Content metadata cache with 10-minute TTL
+// Content metadata cache with 10-minute TTL and max size
+const MAX_CACHE_SIZE = 100
 const contentCache = new Map<string, ContentItemCache>()
 const CACHE_TTL = 10 * 60 * 1000 // 10 minutes
 
-// Thumbnail cache for faster rendering
+// Thumbnail cache with LRU eviction
+const MAX_THUMBNAIL_CACHE = 50
 const thumbnailCache = new Map<string, string>()
+const thumbnailAccessOrder: string[] = []
 
 // Check if cache is valid
 const isCacheValid = (cacheItem: ContentItemCache | undefined): boolean => {
@@ -56,13 +59,48 @@ const getCachedContent = (id: string): ContentItemCache | null => {
   return null
 }
 
-// Set content cache
+// Set content cache with LRU eviction
 const setCachedContent = (id: string, data: any, thumbnail?: string) => {
+  // Evict oldest if at capacity
+  if (contentCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = contentCache.keys().next().value
+    if (firstKey) contentCache.delete(firstKey)
+  }
+  
   contentCache.set(id, {
     data,
     timestamp: Date.now(),
     thumbnail
   })
+}
+
+// Get cached thumbnail with LRU update
+const getCachedThumbnail = (videoId: string): string | null => {
+  const cached = thumbnailCache.get(videoId)
+  if (cached) {
+    // Move to end (most recently accessed)
+    const index = thumbnailAccessOrder.indexOf(videoId)
+    if (index > -1) {
+      thumbnailAccessOrder.splice(index, 1)
+      thumbnailAccessOrder.push(videoId)
+    }
+    return cached
+  }
+  return null
+}
+
+// Set thumbnail cache with LRU eviction
+const setCachedThumbnail = (videoId: string, url: string) => {
+  // Evict least recently used if at capacity
+  if (thumbnailCache.size >= MAX_THUMBNAIL_CACHE && !thumbnailCache.has(videoId)) {
+    const oldestKey = thumbnailAccessOrder.shift()
+    if (oldestKey) thumbnailCache.delete(oldestKey)
+  }
+  
+  thumbnailCache.set(videoId, url)
+  if (!thumbnailAccessOrder.includes(videoId)) {
+    thumbnailAccessOrder.push(videoId)
+  }
 }
 
 // ============================================================================
@@ -112,7 +150,7 @@ const formatDuration = (minutes?: number): string => {
 }
 
 // ============================================================================
-// ENHANCED VIDEO ITEM
+// ENHANCED VIDEO ITEM WITH OPTIMIZATIONS
 // ============================================================================
 
 export const EnhancedVideoItem = memo(({ 
@@ -120,48 +158,93 @@ export const EnhancedVideoItem = memo(({
   isSelected, 
   isMobile, 
   onSelect,
-  showThumbnail = false
+  showThumbnail = false,
+  priority = false // If true, preload thumbnail immediately
 }: {
   video: Video
   isSelected: boolean
   isMobile: boolean
   onSelect: () => void
   showThumbnail?: boolean
+  priority?: boolean
 }) => {
   const [isHovered, setIsHovered] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [thumbnail, setThumbnail] = useState<string | null>(null)
   const [prefetched, setPrefetched] = useState(false)
+  const prefetchTimeoutRef = useRef<NodeJS.Timeout>()
+  const isMounted = useRef(true)
 
-  // Extract video ID on mount
-  const videoId = video.youtube_url ? extractYouTubeId(video.youtube_url) : null
+  // Extract video ID once using useMemo
+  const videoId = useMemo(() => {
+    if (!video.youtube_url) return null
+    return extractYouTubeId(video.youtube_url)
+  }, [video.youtube_url])
 
-  // Prefetch thumbnail on hover
+  // Check for cached thumbnail on mount
   useEffect(() => {
-    if (!isHovered || !videoId || prefetched || isMobile) return
-
-    const timer = setTimeout(() => {
-      // Check cache first
-      const cached = thumbnailCache.get(videoId)
+    isMounted.current = true
+    
+    if (videoId) {
+      const cached = getCachedThumbnail(videoId)
       if (cached) {
         setThumbnail(cached)
         setPrefetched(true)
-        return
+      } else if (priority && showThumbnail) {
+        // Preload immediately if priority
+        loadThumbnail(videoId)
       }
+    }
+    
+    return () => {
+      isMounted.current = false
+      if (prefetchTimeoutRef.current) {
+        clearTimeout(prefetchTimeoutRef.current)
+      }
+    }
+  }, [videoId, priority, showThumbnail])
 
-      // Prefetch thumbnail
-      const thumbnailUrl = getYouTubeThumbnail(videoId)
-      const img = new Image()
-      img.onload = () => {
-        thumbnailCache.set(videoId, thumbnailUrl)
+  // Thumbnail loading function
+  const loadThumbnail = useCallback((id: string) => {
+    const thumbnailUrl = getYouTubeThumbnail(id, 'mqdefault')
+    const img = new Image()
+    img.onload = () => {
+      if (isMounted.current) {
+        setCachedThumbnail(id, thumbnailUrl)
         setThumbnail(thumbnailUrl)
         setPrefetched(true)
       }
-      img.src = thumbnailUrl
-    }, 300) // 300ms debounce
+    }
+    img.onerror = () => {
+      // Try lower quality if high quality fails
+      const fallbackUrl = getYouTubeThumbnail(id, 'default')
+      const fallbackImg = new Image()
+      fallbackImg.onload = () => {
+        if (isMounted.current) {
+          setCachedThumbnail(id, fallbackUrl)
+          setThumbnail(fallbackUrl)
+          setPrefetched(true)
+        }
+      }
+      fallbackImg.src = fallbackUrl
+    }
+    img.src = thumbnailUrl
+  }, [])
 
-    return () => clearTimeout(timer)
-  }, [isHovered, videoId, prefetched, isMobile])
+  // Prefetch thumbnail on hover with debounce
+  useEffect(() => {
+    if (!isHovered || !videoId || prefetched || isMobile || !showThumbnail) return
+
+    prefetchTimeoutRef.current = setTimeout(() => {
+      loadThumbnail(videoId)
+    }, 200) // 200ms debounce (reduced from 300ms)
+
+    return () => {
+      if (prefetchTimeoutRef.current) {
+        clearTimeout(prefetchTimeoutRef.current)
+      }
+    }
+  }, [isHovered, videoId, prefetched, isMobile, showThumbnail, loadThumbnail])
 
   const handleMouseEnter = useCallback(() => {
     if (isMobile || isSelected) return
@@ -173,26 +256,39 @@ export const EnhancedVideoItem = memo(({
   }, [])
 
   const handleClick = useCallback(() => {
+    if (isLoading) return
     setIsLoading(true)
-    // Optimistic UI update
-    setTimeout(() => {
+    // Optimistic UI update with requestAnimationFrame for smoother transition
+    requestAnimationFrame(() => {
       onSelect()
-      setIsLoading(false)
-    }, 50)
-  }, [onSelect])
+      // Reset loading after a short delay
+      setTimeout(() => {
+        if (isMounted.current) {
+          setIsLoading(false)
+        }
+      }, 100)
+    })
+  }, [onSelect, isLoading])
+
+  // Memoize button classes
+  const buttonClasses = useMemo(() => {
+    const base = `w-full justify-start text-left h-auto rounded-md group transition-all duration-150 touch-manipulation min-w-0 will-change-transform`
+    const padding = isMobile ? 'px-2 py-2.5 min-h-[40px]' : 'px-2 py-2'
+    const state = isSelected
+      ? "bg-primary/10 text-primary border border-primary/20 shadow-sm scale-[1.01]"
+      : "hover:bg-accent/50 text-muted-foreground hover:text-foreground hover:scale-[1.02] active:scale-[0.98]"
+    return `${base} ${padding} ${state}`
+  }, [isMobile, isSelected])
 
   return (
     <Button
       variant="ghost"
-      className={`w-full justify-start text-left ${isMobile ? 'px-2 py-2.5 min-h-[40px]' : 'px-2 py-2'} h-auto rounded-md group transition-all duration-200 touch-manipulation min-w-0 will-change-transform ${
-        isSelected
-          ? "bg-primary/10 text-primary border border-primary/20 shadow-sm scale-[1.01]"
-          : "hover:bg-accent/50 text-muted-foreground hover:text-foreground hover:scale-[1.02] active:scale-[0.98]"
-      }`}
+      className={buttonClasses}
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       disabled={isLoading}
+      aria-label={`Play video: ${video.title}`}
     >
       <div className="flex items-start gap-2.5 w-full min-w-0">
         {/* Icon/Thumbnail */}
@@ -256,7 +352,7 @@ export const EnhancedVideoItem = memo(({
 EnhancedVideoItem.displayName = "EnhancedVideoItem"
 
 // ============================================================================
-// ENHANCED SLIDE ITEM
+// ENHANCED SLIDE ITEM WITH OPTIMIZATIONS
 // ============================================================================
 
 export const EnhancedSlideItem = memo(({ 
@@ -264,43 +360,74 @@ export const EnhancedSlideItem = memo(({
   isSelected, 
   isMobile, 
   onSelect,
-  showFileInfo = true
+  showFileInfo = true,
+  priority = false
 }: {
   slide: Slide
   isSelected: boolean
   isMobile: boolean
   onSelect: () => void
   showFileInfo?: boolean
+  priority?: boolean
 }) => {
   const [isHovered, setIsHovered] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [prefetched, setPrefetched] = useState(false)
+  const prefetchTimeoutRef = useRef<NodeJS.Timeout>()
+  const isMounted = useRef(true)
 
-  const fileInfo = getFileInfo(slide.file_url)
+  // Memoize file info
+  const fileInfo = useMemo(() => getFileInfo(slide.file_url), [slide.file_url])
+
+  // Check cache on mount
+  useEffect(() => {
+    isMounted.current = true
+    
+    const cached = getCachedContent(slide.id)
+    if (cached) {
+      setPrefetched(true)
+    } else if (priority) {
+      // Prefetch immediately if priority
+      prefetchFile()
+    }
+    
+    return () => {
+      isMounted.current = false
+      if (prefetchTimeoutRef.current) {
+        clearTimeout(prefetchTimeoutRef.current)
+      }
+    }
+  }, [slide.id, priority])
+
+  // File prefetch function
+  const prefetchFile = useCallback(() => {
+    if (prefetched) return
+    
+    // HEAD request for validation without downloading full file
+    fetch(slide.file_url, { method: 'HEAD', mode: 'no-cors' })
+      .then(() => {
+        if (isMounted.current) {
+          setCachedContent(slide.id, { prefetched: true, url: slide.file_url })
+          setPrefetched(true)
+        }
+      })
+      .catch(() => {
+        // Silent fail - file will load on demand
+      })
+  }, [slide.id, slide.file_url, prefetched])
 
   // Prefetch file on hover
   useEffect(() => {
     if (!isHovered || prefetched || isMobile) return
 
-    const timer = setTimeout(() => {
-      // Check cache first
-      const cached = getCachedContent(slide.id)
-      if (cached) {
-        setPrefetched(true)
-        return
+    prefetchTimeoutRef.current = setTimeout(prefetchFile, 200)
+
+    return () => {
+      if (prefetchTimeoutRef.current) {
+        clearTimeout(prefetchTimeoutRef.current)
       }
-
-      // Prefetch file URL (HEAD request for faster validation)
-      fetch(slide.file_url, { method: 'HEAD' })
-        .then(() => {
-          setCachedContent(slide.id, { prefetched: true })
-          setPrefetched(true)
-        })
-        .catch(() => {})
-    }, 300) // 300ms debounce
-
-    return () => clearTimeout(timer)
-  }, [isHovered, slide.id, slide.file_url, prefetched, isMobile])
+    }
+  }, [isHovered, prefetched, isMobile, prefetchFile])
 
   const handleMouseEnter = useCallback(() => {
     if (isMobile || isSelected) return
@@ -312,32 +439,43 @@ export const EnhancedSlideItem = memo(({
   }, [])
 
   const handleClick = useCallback(() => {
+    if (isLoading) return
     setIsLoading(true)
-    // Optimistic UI update
-    setTimeout(() => {
+    requestAnimationFrame(() => {
       onSelect()
-      setIsLoading(false)
-    }, 50)
-  }, [onSelect])
+      setTimeout(() => {
+        if (isMounted.current) {
+          setIsLoading(false)
+        }
+      }, 100)
+    })
+  }, [onSelect, isLoading])
+
+  // Memoize button classes
+  const buttonClasses = useMemo(() => {
+    const base = `w-full justify-start text-left h-auto rounded-md group transition-all duration-150 touch-manipulation min-w-0 will-change-transform`
+    const padding = isMobile ? 'px-2 py-2.5 min-h-[40px]' : 'px-2 py-2'
+    const state = isSelected
+      ? "bg-primary/10 text-primary border border-primary/20 shadow-sm scale-[1.01]"
+      : "hover:bg-accent/50 text-muted-foreground hover:text-foreground hover:scale-[1.02] active:scale-[0.98]"
+    return `${base} ${padding} ${state}`
+  }, [isMobile, isSelected])
 
   return (
     <Button
       variant="ghost"
-      className={`w-full justify-start text-left ${isMobile ? 'px-2 py-2.5 min-h-[40px]' : 'px-2 py-2'} h-auto rounded-md group transition-all duration-200 touch-manipulation min-w-0 will-change-transform ${
-        isSelected
-          ? "bg-primary/10 text-primary border border-primary/20 shadow-sm scale-[1.01]"
-          : "hover:bg-accent/50 text-muted-foreground hover:text-foreground hover:scale-[1.02] active:scale-[0.98]"
-      }`}
+      className={buttonClasses}
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       disabled={isLoading}
+      aria-label={`Open slide: ${slide.title}`}
     >
       <div className="flex items-start gap-2.5 w-full min-w-0">
         {/* Icon */}
         <div className={`relative flex-shrink-0 ${isHovered && !isSelected ? 'animate-pulse' : ''}`}>
           <FileText 
-            className={`h-3.5 w-3.5 mt-0.5 transition-all duration-200 ${
+            className={`h-3.5 w-3.5 mt-0.5 transition-all duration-150 ${
               isSelected 
                 ? "text-blue-500 fill-blue-500/20" 
                 : isHovered 
@@ -345,6 +483,9 @@ export const EnhancedSlideItem = memo(({
                   : "text-blue-400"
             } ${isLoading ? 'animate-pulse' : ''}`} 
           />
+          {prefetched && !isSelected && (
+            <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-400 rounded-full" title="Preloaded" />
+          )}
         </div>
 
         {/* Content */}
@@ -423,6 +564,7 @@ export const contentCacheUtils = {
   clearAll: () => {
     contentCache.clear()
     thumbnailCache.clear()
+    thumbnailAccessOrder.length = 0
   },
   
   // Clear specific item
@@ -430,46 +572,80 @@ export const contentCacheUtils = {
     contentCache.delete(id)
   },
   
+  // Clear thumbnail cache
+  clearThumbnails: () => {
+    thumbnailCache.clear()
+    thumbnailAccessOrder.length = 0
+  },
+  
   // Get cache stats
   getStats: () => ({
     contentCacheSize: contentCache.size,
     thumbnailCacheSize: thumbnailCache.size,
-    totalSize: contentCache.size + thumbnailCache.size
+    totalSize: contentCache.size + thumbnailCache.size,
+    maxContentCache: MAX_CACHE_SIZE,
+    maxThumbnailCache: MAX_THUMBNAIL_CACHE
   }),
   
-  // Preload thumbnails for videos
-  preloadThumbnails: async (videos: Video[]) => {
-    const promises = videos.map(video => {
-      if (!video.youtube_url) return Promise.resolve()
-      
+  // Preload thumbnails for videos (batch)
+  preloadThumbnails: async (videos: Video[], concurrency = 3) => {
+    const videosToLoad = videos.filter(video => {
+      if (!video.youtube_url) return false
       const videoId = extractYouTubeId(video.youtube_url)
-      if (!videoId || thumbnailCache.has(videoId)) return Promise.resolve()
-      
-      return new Promise<void>((resolve) => {
-        const thumbnailUrl = getYouTubeThumbnail(videoId)
-        const img = new Image()
-        img.onload = () => {
-          thumbnailCache.set(videoId, thumbnailUrl)
-          resolve()
-        }
-        img.onerror = () => resolve()
-        img.src = thumbnailUrl
-      })
+      return videoId && !getCachedThumbnail(videoId)
     })
     
-    return Promise.all(promises)
+    // Load in batches for better performance
+    const batches: Video[][] = []
+    for (let i = 0; i < videosToLoad.length; i += concurrency) {
+      batches.push(videosToLoad.slice(i, i + concurrency))
+    }
+    
+    for (const batch of batches) {
+      await Promise.all(batch.map(video => {
+        const videoId = extractYouTubeId(video.youtube_url!)
+        if (!videoId) return Promise.resolve()
+        
+        return new Promise<void>((resolve) => {
+          const thumbnailUrl = getYouTubeThumbnail(videoId)
+          const img = new Image()
+          img.onload = () => {
+            setCachedThumbnail(videoId, thumbnailUrl)
+            resolve()
+          }
+          img.onerror = () => resolve()
+          img.src = thumbnailUrl
+        })
+      }))
+    }
   },
   
-  // Prefetch slides
-  prefetchSlides: async (slides: Slide[]) => {
-    const promises = slides.map(slide => {
-      if (getCachedContent(slide.id)) return Promise.resolve()
-      
-      return fetch(slide.file_url, { method: 'HEAD' })
-        .then(() => setCachedContent(slide.id, { prefetched: true }))
-        .catch(() => {})
-    })
+  // Prefetch slides (batch with rate limiting)
+  prefetchSlides: async (slides: Slide[], concurrency = 2) => {
+    const slidesToLoad = slides.filter(slide => !getCachedContent(slide.id))
     
-    return Promise.all(promises)
+    const batches: Slide[][] = []
+    for (let i = 0; i < slidesToLoad.length; i += concurrency) {
+      batches.push(slidesToLoad.slice(i, i + concurrency))
+    }
+    
+    for (const batch of batches) {
+      await Promise.all(batch.map(slide => 
+        fetch(slide.file_url, { method: 'HEAD', mode: 'no-cors' })
+          .then(() => setCachedContent(slide.id, { prefetched: true, url: slide.file_url }))
+          .catch(() => {})
+      ))
+    }
+  },
+  
+  // Preload next content items (smart preloading)
+  preloadNext: async (videos: Video[], slides: Slide[], count = 3) => {
+    const videosToPreload = videos.slice(0, count)
+    const slidesToPreload = slides.slice(0, count)
+    
+    await Promise.all([
+      contentCacheUtils.preloadThumbnails(videosToPreload, 2),
+      contentCacheUtils.prefetchSlides(slidesToPreload, 2)
+    ])
   }
 }
