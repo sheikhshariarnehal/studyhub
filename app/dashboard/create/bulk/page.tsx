@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
 import {
   Search,
@@ -36,6 +37,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { DepartmentBatchSelector } from "@/components/dashboard/department-batch-selector"
+import { cache } from "@/lib/cache"
 
 interface Department {
   id: string
@@ -81,11 +83,91 @@ interface UserContext {
 type SortField = 'title' | 'section' | 'created_at' | 'updated_at' | 'courses_count'
 type SortOrder = 'asc' | 'desc'
 
+// Debounce hook for search optimization
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value)
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value)
+    }, delay)
+
+    return () => {
+      clearTimeout(handler)
+    }
+  }, [value, delay])
+
+  return debouncedValue
+}
+
+// Cache key generator
+const getCacheKey = (deptId: string | null, batchId: string | null) => 
+  `bulk-semesters-${deptId || 'all'}-${batchId || 'all'}`
+
+// Skeleton components for loading state
+function StatsCardSkeleton() {
+  return (
+    <Card className="border-l-4 border-l-gray-300 shadow-sm">
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <Skeleton className="h-3 w-20 mb-2" />
+            <Skeleton className="h-8 w-12" />
+          </div>
+          <Skeleton className="h-10 w-10 rounded-full" />
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function TableRowSkeleton() {
+  return (
+    <TableRow>
+      <TableCell>
+        <div className="flex flex-col gap-2">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-3 w-60" />
+          <div className="flex gap-2">
+            <Skeleton className="h-5 w-16" />
+            <Skeleton className="h-5 w-12" />
+          </div>
+        </div>
+      </TableCell>
+      <TableCell><Skeleton className="h-6 w-16" /></TableCell>
+      <TableCell>
+        <div className="flex flex-col gap-1">
+          <Skeleton className="h-4 w-12" />
+          <Skeleton className="h-4 w-16" />
+        </div>
+      </TableCell>
+      <TableCell>
+        <div className="flex flex-col gap-2 items-center">
+          <div className="flex gap-3">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+          <Skeleton className="h-3 w-32" />
+        </div>
+      </TableCell>
+      <TableCell className="text-center"><Skeleton className="h-5 w-5 mx-auto rounded-full" /></TableCell>
+      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+      <TableCell className="text-right">
+        <div className="flex items-center justify-end gap-1">
+          <Skeleton className="h-8 w-8" />
+          <Skeleton className="h-8 w-8" />
+          <Skeleton className="h-8 w-8" />
+        </div>
+      </TableCell>
+    </TableRow>
+  )
+}
+
 export default function DashboardBulkCreatorPage() {
   const router = useRouter()
   const [semesters, setSemesters] = useState<SemesterSummary[]>([])
-  const [filteredSemesters, setFilteredSemesters] = useState<SemesterSummary[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [sortField, setSortField] = useState<SortField>('updated_at')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
@@ -95,19 +177,41 @@ export default function DashboardBulkCreatorPage() {
   const [userContext, setUserContext] = useState<UserContext | null>(null)
   const [viewDepartmentId, setViewDepartmentId] = useState<string | null>(null)
   const [viewBatchId, setViewBatchId] = useState<string | null>(null)
+  
+  // Abort controller for request cancellation
+  const abortControllerRef = useRef<AbortController | null>(null)
+
+  // Debounced search query for performance
+  const debouncedSearchQuery = useDebounce(searchQuery, 300)
 
   const isContributor = userContext?.role === "contributor"
 
-  useEffect(() => {
-    loadSemesters()
-  }, [viewDepartmentId, viewBatchId])
+  // Load semesters with caching
+  const loadSemesters = useCallback(async (forceRefresh = false) => {
+    // Cancel any pending request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    abortControllerRef.current = new AbortController()
 
-  useEffect(() => {
-    filterAndSortSemesters()
-  }, [semesters, searchQuery, sortField, sortOrder, statusFilter])
+    const cacheKey = getCacheKey(viewDepartmentId, viewBatchId)
+    
+    // Check cache first (unless forcing refresh)
+    if (!forceRefresh) {
+      const cachedData = cache.get(cacheKey)
+      if (cachedData) {
+        setSemesters(cachedData.semesters || [])
+        if (cachedData.userContext) {
+          setUserContext(cachedData.userContext)
+        }
+        setIsLoading(false)
+        return
+      }
+    }
 
-  const loadSemesters = async () => {
-    setIsLoading(true)
+    setIsLoading(forceRefresh ? false : true)
+    setIsRefreshing(forceRefresh)
+    
     try {
       // Build URL with department/batch filters
       const params = new URLSearchParams()
@@ -115,11 +219,16 @@ export default function DashboardBulkCreatorPage() {
       if (viewBatchId) params.set('batch_id', viewBatchId)
       
       const url = `/api/semesters/summary${params.toString() ? `?${params}` : ''}`
-      const response = await fetch(url)
+      const response = await fetch(url, {
+        signal: abortControllerRef.current.signal
+      })
       
       if (response.ok) {
         const data = await response.json()
         setSemesters(data.semesters || [])
+        
+        // Cache the response for 2 minutes
+        cache.set(cacheKey, data, 2 * 60 * 1000)
         
         // Update user context if provided
         if (data.userContext) {
@@ -131,24 +240,37 @@ export default function DashboardBulkCreatorPage() {
           }
         }
         
-        toast.success(`Loaded ${data.semesters?.length || 0} semesters`)
+        if (forceRefresh) {
+          toast.success(`Loaded ${data.semesters?.length || 0} semesters`)
+        }
       } else {
         toast.error("Failed to load semesters")
       }
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return // Request was cancelled, ignore
+      }
       console.error("Error loading semesters:", error)
       toast.error("Error loading semesters")
     } finally {
       setIsLoading(false)
+      setIsRefreshing(false)
     }
-  }
+  }, [viewDepartmentId, viewBatchId])
 
-  const handleContextChange = useCallback((departmentId: string | null, batchId: string | null) => {
-    setViewDepartmentId(departmentId)
-    setViewBatchId(batchId)
-  }, [])
+  useEffect(() => {
+    loadSemesters()
+    
+    return () => {
+      // Cleanup: cancel pending request on unmount
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }
+  }, [loadSemesters])
 
-  const filterAndSortSemesters = () => {
+  // Memoized filtering and sorting
+  const filteredSemesters = useMemo(() => {
     let filtered = [...semesters]
 
     // Status filter
@@ -158,9 +280,9 @@ export default function DashboardBulkCreatorPage() {
       )
     }
 
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
+    // Search filter (using debounced value)
+    if (debouncedSearchQuery) {
+      const query = debouncedSearchQuery.toLowerCase()
       filtered = filtered.filter(s =>
         s.title.toLowerCase().includes(query) ||
         s.section.toLowerCase().includes(query) ||
@@ -193,10 +315,30 @@ export default function DashboardBulkCreatorPage() {
       return sortOrder === 'asc' ? comparison : -comparison
     })
 
-    setFilteredSemesters(filtered)
-  }
+    return filtered
+  }, [semesters, debouncedSearchQuery, sortField, sortOrder, statusFilter])
 
-  const handleToggleStatus = async (id: string, currentStatus: boolean) => {
+  // Memoized stats
+  const stats = useMemo(() => ({
+    total: semesters.length,
+    active: semesters.filter(s => s.is_active).length,
+    inactive: semesters.filter(s => !s.is_active).length,
+    totalCourses: semesters.reduce((sum, s) => sum + s.courses_count, 0)
+  }), [semesters])
+
+  const handleContextChange = useCallback((departmentId: string | null, batchId: string | null) => {
+    setViewDepartmentId(departmentId)
+    setViewBatchId(batchId)
+  }, [])
+
+  const handleRefresh = useCallback(() => {
+    // Clear cache for current context
+    const cacheKey = getCacheKey(viewDepartmentId, viewBatchId)
+    cache.delete(cacheKey)
+    loadSemesters(true)
+  }, [viewDepartmentId, viewBatchId, loadSemesters])
+
+  const handleToggleStatus = useCallback(async (id: string, currentStatus: boolean) => {
     try {
       const response = await fetch(`/api/semesters/${id}/toggle-status`, {
         method: 'PATCH',
@@ -206,16 +348,21 @@ export default function DashboardBulkCreatorPage() {
 
       if (response.ok) {
         toast.success(currentStatus ? "Semester deactivated" : "Semester activated")
-        loadSemesters()
+        // Optimistically update local state
+        setSemesters(prev => prev.map(s => 
+          s.id === id ? { ...s, is_active: !currentStatus } : s
+        ))
+        // Invalidate cache
+        cache.delete(getCacheKey(viewDepartmentId, viewBatchId))
       } else {
         toast.error("Failed to update status")
       }
     } catch (error) {
       toast.error("Error updating status")
     }
-  }
+  }, [viewDepartmentId, viewBatchId])
 
-  const handleDuplicate = async (id: string) => {
+  const handleDuplicate = useCallback(async (id: string) => {
     try {
       const response = await fetch(`/api/semesters/${id}/duplicate`, {
         method: 'POST'
@@ -223,16 +370,18 @@ export default function DashboardBulkCreatorPage() {
 
       if (response.ok) {
         toast.success("Semester duplicated successfully")
-        loadSemesters()
+        // Invalidate cache and reload
+        cache.delete(getCacheKey(viewDepartmentId, viewBatchId))
+        loadSemesters(true)
       } else {
         toast.error("Failed to duplicate semester")
       }
     } catch (error) {
       toast.error("Error duplicating semester")
     }
-  }
+  }, [viewDepartmentId, viewBatchId, loadSemesters])
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     try {
       const response = await fetch(`/api/semesters/${id}`, {
         method: 'DELETE'
@@ -240,21 +389,17 @@ export default function DashboardBulkCreatorPage() {
 
       if (response.ok) {
         toast.success("Semester deleted successfully")
-        loadSemesters()
+        // Optimistically remove from local state
+        setSemesters(prev => prev.filter(s => s.id !== id))
+        // Invalidate cache
+        cache.delete(getCacheKey(viewDepartmentId, viewBatchId))
       } else {
         toast.error("Failed to delete semester")
       }
     } catch (error) {
       toast.error("Error deleting semester")
     }
-  }
-
-  const stats = {
-    total: semesters.length,
-    active: semesters.filter(s => s.is_active).length,
-    inactive: semesters.filter(s => !s.is_active).length,
-    totalCourses: semesters.reduce((sum, s) => sum + s.courses_count, 0)
-  }
+  }, [viewDepartmentId, viewBatchId])
 
   return (
     <div className="w-full px-4 sm:px-6 lg:px-8 py-6 max-w-[1600px] mx-auto">
@@ -278,61 +423,72 @@ export default function DashboardBulkCreatorPage() {
       {/* Stats Cards */}
       <div className="flex flex-col gap-5 mb-6">
         <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-          <Card className="border-l-4 border-l-blue-500 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-muted-foreground truncate">Total Semesters</p>
-                  <p className="text-2xl font-bold mt-1">{stats.total}</p>
-                </div>
-                <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <Layers className="h-5 w-5 text-blue-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          {isLoading ? (
+            <>
+              <StatsCardSkeleton />
+              <StatsCardSkeleton />
+              <StatsCardSkeleton />
+              <StatsCardSkeleton />
+            </>
+          ) : (
+            <>
+              <Card className="border-l-4 border-l-blue-500 shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-muted-foreground truncate">Total Semesters</p>
+                      <p className="text-2xl font-bold mt-1">{stats.total}</p>
+                    </div>
+                    <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Layers className="h-5 w-5 text-blue-600" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card className="border-l-4 border-l-green-500 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-muted-foreground truncate">Active</p>
-                  <p className="text-2xl font-bold mt-1 text-green-600">{stats.active}</p>
-                </div>
-                <div className="h-10 w-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <CheckCircle2 className="h-5 w-5 text-green-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              <Card className="border-l-4 border-l-green-500 shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-muted-foreground truncate">Active</p>
+                      <p className="text-2xl font-bold mt-1 text-green-600">{stats.active}</p>
+                    </div>
+                    <div className="h-10 w-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <CheckCircle2 className="h-5 w-5 text-green-600" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card className="border-l-4 border-l-orange-500 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-muted-foreground truncate">Inactive</p>
-                  <p className="text-2xl font-bold mt-1 text-orange-600">{stats.inactive}</p>
-                </div>
-                <div className="h-10 w-10 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <XCircle className="h-5 w-5 text-orange-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              <Card className="border-l-4 border-l-orange-500 shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-muted-foreground truncate">Inactive</p>
+                      <p className="text-2xl font-bold mt-1 text-orange-600">{stats.inactive}</p>
+                    </div>
+                    <div className="h-10 w-10 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <XCircle className="h-5 w-5 text-orange-600" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-          <Card className="border-l-4 border-l-purple-500 shadow-sm hover:shadow-md transition-shadow">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-medium text-muted-foreground truncate">Total Courses</p>
-                  <p className="text-2xl font-bold mt-1 text-purple-600">{stats.totalCourses}</p>
-                </div>
-                <div className="h-10 w-10 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <BookOpen className="h-5 w-5 text-purple-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              <Card className="border-l-4 border-l-purple-500 shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-muted-foreground truncate">Total Courses</p>
+                      <p className="text-2xl font-bold mt-1 text-purple-600">{stats.totalCourses}</p>
+                    </div>
+                    <div className="h-10 w-10 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <BookOpen className="h-5 w-5 text-purple-600" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
       </div>
 
@@ -396,8 +552,8 @@ export default function DashboardBulkCreatorPage() {
           <CardTitle className="flex items-center justify-between">
             <span>Semesters List</span>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={loadSemesters} disabled={isLoading}>
-                <RefreshCw className={`h-4 w-4 mr-1 ${isLoading ? 'animate-spin' : ''}`} />
+              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading || isRefreshing}>
+                <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
               <Badge variant="outline" className="text-sm">
@@ -411,8 +567,27 @@ export default function DashboardBulkCreatorPage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <div className="border rounded-lg overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="font-semibold min-w-[250px]">Semester Info</TableHead>
+                    <TableHead className="font-semibold min-w-[100px]">Section</TableHead>
+                    <TableHead className="font-semibold min-w-[120px]">Department/Batch</TableHead>
+                    <TableHead className="font-semibold text-center min-w-[200px]">Content</TableHead>
+                    <TableHead className="font-semibold text-center min-w-[80px]">Status</TableHead>
+                    <TableHead className="font-semibold min-w-[120px]">Last Updated</TableHead>
+                    <TableHead className="text-right font-semibold min-w-[140px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRowSkeleton />
+                  <TableRowSkeleton />
+                  <TableRowSkeleton />
+                  <TableRowSkeleton />
+                  <TableRowSkeleton />
+                </TableBody>
+              </Table>
             </div>
           ) : filteredSemesters.length === 0 ? (
             <div className="text-center py-12">
@@ -458,7 +633,9 @@ export default function DashboardBulkCreatorPage() {
                           <div className="flex items-center gap-2">
                             <span className="font-semibold text-base">{semester.title}</span>
                             {!semester.canEdit && isContributor && (
-                              <Lock className="h-3.5 w-3.5 text-muted-foreground" title="Read-only" />
+                              <span title="Read-only">
+                                <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+                              </span>
                             )}
                           </div>
                           {semester.description && (
