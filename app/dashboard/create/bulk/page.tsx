@@ -21,7 +21,6 @@ import {
   BookOpen,
   Loader2,
   Filter,
-  RefreshCw,
   CheckCircle2,
   XCircle,
   Power,
@@ -167,7 +166,6 @@ export default function DashboardBulkCreatorPage() {
   const router = useRouter()
   const [semesters, setSemesters] = useState<SemesterSummary[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [sortField, setSortField] = useState<SortField>('updated_at')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
@@ -210,7 +208,6 @@ export default function DashboardBulkCreatorPage() {
     }
 
     setIsLoading(forceRefresh ? false : true)
-    setIsRefreshing(forceRefresh)
     
     try {
       // Build URL with department/batch filters
@@ -254,7 +251,6 @@ export default function DashboardBulkCreatorPage() {
       toast.error("Error loading semesters")
     } finally {
       setIsLoading(false)
-      setIsRefreshing(false)
     }
   }, [viewDepartmentId, viewBatchId])
 
@@ -330,13 +326,6 @@ export default function DashboardBulkCreatorPage() {
     setViewDepartmentId(departmentId)
     setViewBatchId(batchId)
   }, [])
-
-  const handleRefresh = useCallback(() => {
-    // Clear cache for current context
-    const cacheKey = getCacheKey(viewDepartmentId, viewBatchId)
-    cache.delete(cacheKey)
-    loadSemesters(true)
-  }, [viewDepartmentId, viewBatchId, loadSemesters])
 
   const handleToggleStatus = useCallback(async (id: string, currentStatus: boolean) => {
     try {
@@ -552,10 +541,6 @@ export default function DashboardBulkCreatorPage() {
           <CardTitle className="flex items-center justify-between">
             <span>Semesters List</span>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading || isRefreshing}>
-                <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
-                Refresh
-              </Button>
               <Badge variant="outline" className="text-sm">
                 {filteredSemesters.length} result{filteredSemesters.length !== 1 ? 's' : ''}
               </Badge>
