@@ -128,6 +128,8 @@ export async function POST(request: NextRequest) {
       created_by: user.id,
       department_id: contentDepartmentId,
       batch_id: contentBatchId,
+      creator_department_id: user.department_id,
+      creator_batch_id: user.batch_id,
     }
 
     // Add optional date fields if provided

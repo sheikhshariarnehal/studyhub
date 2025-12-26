@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -71,13 +72,18 @@ interface UserContext {
   full_name: string
   department_id: string | null
   batch_id: string | null
+  section_id: string | null
   department?: { id: string; name: string; short_name: string } | null
   batch?: { id: string; batch_name: string; batch_number: number } | null
+  section?: { id: string; name: string } | null
   is_approved: boolean
 }
 
 // Interfaces
+type SemesterType = 'Fall' | 'Summer' | 'Spring' | null
+
 interface SemesterData {
+  selectedSemester: SemesterType
   title: string
   description: string
   section: string
@@ -870,6 +876,18 @@ const SortableTopic = memo(function SortableTopic({ topic, topicIndex, courseInd
   )
 })
 // ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
+
+// Generate semester title based on selected semester and current date
+const generateSemesterTitle = (semesterType: SemesterType): string => {
+  if (!semesterType) return ""
+  const currentDate = new Date()
+  const currentYear = currentDate.getFullYear()
+  return `${semesterType} ${currentYear}`
+}
+
+// ============================================================================
 // MAIN CREATE PAGE COMPONENT
 // ============================================================================
 
@@ -883,6 +901,7 @@ export default function CreateBulkCreatorPage() {
   const [expandedStudyTool, setExpandedStudyTool] = useState<{ courseIndex: number; toolIndex: number } | null>(null)
   const [formData, setFormData] = useState<AllInOneData>({
     semester: {
+      selectedSemester: null,
       title: "",
       description: "",
       section: "",
@@ -915,11 +934,21 @@ export default function CreateBulkCreatorPage() {
         const data = await response.json()
         if (data.success && data.user) {
           // Map API response to UserContext format
-          setUserContext({
+          const userData = {
             ...data.user,
             department: data.user.departments, // API returns 'departments', we need 'department'
             batch: data.user.batches, // API returns 'batches', we need 'batch'
-          })
+            section: data.user.sections, // API returns 'sections', we need 'section'
+          }
+          setUserContext(userData)
+          
+          // Auto-populate section for contributors
+          if (userData.role === "contributor" && userData.section?.name) {
+            setFormData(prev => ({
+              ...prev,
+              semester: { ...prev.semester, section: userData.section.name }
+            }))
+          }
         }
       } catch (error) {
         console.error("Error fetching user profile:", error)
@@ -1235,6 +1264,10 @@ export default function CreateBulkCreatorPage() {
 
   // Validation
   const validateForm = (): boolean => {
+    if (!formData.semester.selectedSemester) {
+      toast.error("Please select a semester (Fall, Summer, or Spring)")
+      return false
+    }
     if (!formData.semester.title.trim()) {
       toast.error("Semester title is required")
       return false
@@ -1445,22 +1478,52 @@ export default function CreateBulkCreatorPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-4 pt-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium flex items-center gap-2">
-                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                    Semester Title <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    placeholder="e.g., Fall 2025"
-                    value={formData.semester.title}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      semester: { ...prev.semester, title: e.target.value }
-                    }))}
-                    className="h-10"
-                  />
+              {/* Semester Selection with Checkboxes */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                  Select Semester <span className="text-red-500">*</span>
+                </Label>
+                <div className="flex flex-wrap gap-4">
+                  {(['Fall', 'Summer', 'Spring'] as const).map((semester) => (
+                    <div key={semester} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`semester-${semester}`}
+                        checked={formData.semester.selectedSemester === semester}
+                        onCheckedChange={(checked) => {
+                          const newSemester = checked ? semester : null
+                          const generatedTitle = generateSemesterTitle(newSemester)
+                          setFormData(prev => ({
+                            ...prev,
+                            semester: { 
+                              ...prev.semester, 
+                              selectedSemester: newSemester,
+                              title: generatedTitle
+                            }
+                          }))
+                        }}
+                        className="h-4 w-4"
+                      />
+                      <label
+                        htmlFor={`semester-${semester}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        {semester}
+                      </label>
+                    </div>
+                  ))}
                 </div>
+                {formData.semester.selectedSemester && (
+                  <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-lg">
+                    <p className="text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2">
+                      <Info className="h-4 w-4" />
+                      <span>Will be saved as: <strong>{formData.semester.title}</strong></span>
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label className="text-sm font-medium flex items-center gap-2">
                     <Users className="h-3.5 w-3.5 text-muted-foreground" />
@@ -1474,7 +1537,15 @@ export default function CreateBulkCreatorPage() {
                       semester: { ...prev.semester, section: e.target.value }
                     }))}
                     className="h-10"
+                    readOnly={isContributor && userContext?.section?.name}
+                    disabled={isContributor && userContext?.section?.name}
                   />
+                  {isContributor && userContext?.section?.name && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Info className="h-3 w-3" />
+                      Auto-filled from your profile
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -2003,7 +2074,7 @@ export default function CreateBulkCreatorPage() {
               
               <Button
                 onClick={handleSubmit}
-                disabled={isCreating || !canSubmit || !formData.semester.title || !formData.semester.section || formData.courses.length === 0}
+                disabled={isCreating || !canSubmit || !formData.semester.selectedSemester || !formData.semester.section || formData.courses.length === 0}
                 size="lg"
                 className="w-full sm:w-auto bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg"
               >
