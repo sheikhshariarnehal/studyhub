@@ -391,7 +391,7 @@ export default function DashboardBulkCreatorPage() {
   }, [viewDepartmentId, viewBatchId])
 
   return (
-    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 max-w-[1600px] mx-auto">
+    <div className="space-y-6">
       {/* Department/Batch Context Selector */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>

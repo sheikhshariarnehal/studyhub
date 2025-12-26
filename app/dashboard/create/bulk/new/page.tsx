@@ -1346,7 +1346,7 @@ export default function CreateBulkCreatorPage() {
 
   return (
     <TooltipProvider>
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto">
+      <div className="space-y-6">
         {/* Header */}
         <div className="mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">

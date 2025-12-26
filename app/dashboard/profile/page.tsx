@@ -364,7 +364,7 @@ export default function DashboardProfilePage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" asChild>
@@ -406,16 +406,18 @@ export default function DashboardProfilePage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Profile Picture & Basic Info */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
-              Basic Information
-            </CardTitle>
-            <CardDescription>Your personal information and profile picture</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            {/* Profile Picture & Basic Info */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="h-5 w-5" />
+                  Basic Information
+                </CardTitle>
+                <CardDescription>Your personal information and profile picture</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
             {/* Avatar Section */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
               <div className="relative group">
@@ -784,38 +786,41 @@ export default function DashboardProfilePage() {
           </CardContent>
         </Card>
 
-        {/* Bio */}
-        <Card>
-          <CardHeader>
-            <CardTitle>About Me</CardTitle>
-            <CardDescription>Write a short bio about yourself</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              placeholder="Tell us about yourself, your interests, and what you're studying..."
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              rows={4}
-              className="resize-none"
-              maxLength={500}
-            />
-            <p className="text-xs text-muted-foreground mt-2">
-              {bio.length}/500 characters
-            </p>
-          </CardContent>
-        </Card>
+            {/* Bio */}
+            <Card>
+              <CardHeader>
+                <CardTitle>About Me</CardTitle>
+                <CardDescription>Write a short bio about yourself</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Textarea
+                  placeholder="Tell us about yourself, your interests, and what you're studying..."
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  rows={4}
+                  className="resize-none"
+                  maxLength={500}
+                />
+                <p className="text-xs text-muted-foreground mt-2">
+                  {bio.length}/500 characters
+                </p>
+              </CardContent>
+            </Card>
 
-        {/* Social Links */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Globe className="h-5 w-5" />
-              Social Links
-            </CardTitle>
-            <CardDescription>Connect your social media profiles</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
+          </div>
+
+          <div className="lg:col-span-1 space-y-6">
+            {/* Social Links */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Globe className="h-5 w-5" />
+                  Social Links
+                </CardTitle>
+                <CardDescription>Connect your social media profiles</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
               <div className="space-y-2">
                 <Label htmlFor="linkedin" className="flex items-center gap-2">
                   <Linkedin className="h-4 w-4 text-[#0077B5]" />
@@ -917,7 +922,7 @@ export default function DashboardProfilePage() {
             <CardDescription>Your account details and status</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4">
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">Role</p>
                 <Badge variant="secondary" className="capitalize">
@@ -947,6 +952,8 @@ export default function DashboardProfilePage() {
             </div>
           </CardContent>
         </Card>
+          </div>
+        </div>
 
         {/* Save Button */}
         <div className="flex justify-end gap-4">
