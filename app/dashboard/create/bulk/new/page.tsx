@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useMemo, memo } from "react"
 import { useRouter } from "next/navigation"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -14,6 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Separator } from "@/components/ui/separator"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Progress } from "@/components/ui/progress"
 import { toast } from "sonner"
 import { generateDemoSemester } from "@/utils/semester-demo-data"
 import {
@@ -53,7 +55,13 @@ import {
   CheckCircle,
   Building2,
   Users,
-  Info
+  Info,
+  ExternalLink,
+  Link as LinkIcon,
+  Layers,
+  GraduationCap,
+  BarChart3,
+  Calendar
 } from "lucide-react"
 
 // User context interface
@@ -117,29 +125,106 @@ interface AllInOneData {
   courses: CourseData[]
 }
 
-// Study Tool Card Component with Drag-and-Drop
-function StudyToolCard({ tool, toolIndex, courseIndex, isExpanded, onToggle, onRemove, onUpdate }: any) {
+// ============================================================================
+// UTILITY COMPONENTS
+// ============================================================================
+
+// Stat Card Component
+const StatCard = memo(function StatCard({ 
+  icon: Icon, 
+  label, 
+  value, 
+  color 
+}: { 
+  icon: React.ElementType
+  label: string
+  value: number
+  color: 'purple' | 'blue' | 'cyan' | 'pink' | 'amber' | 'emerald'
+}) {
+  const colorClasses = {
+    purple: 'from-purple-50 to-violet-50 dark:from-purple-950/50 dark:to-violet-950/50 border-purple-200 dark:border-purple-800/50',
+    blue: 'from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 border-blue-200 dark:border-blue-800/50',
+    cyan: 'from-cyan-50 to-sky-50 dark:from-cyan-950/50 dark:to-sky-950/50 border-cyan-200 dark:border-cyan-800/50',
+    pink: 'from-pink-50 to-rose-50 dark:from-pink-950/50 dark:to-rose-950/50 border-pink-200 dark:border-pink-800/50',
+    amber: 'from-amber-50 to-orange-50 dark:from-amber-950/50 dark:to-orange-950/50 border-amber-200 dark:border-amber-800/50',
+    emerald: 'from-emerald-50 to-green-50 dark:from-emerald-950/50 dark:to-green-950/50 border-emerald-200 dark:border-emerald-800/50',
+  }
+  
+  const iconColorClasses = {
+    purple: 'bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400',
+    blue: 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400',
+    cyan: 'bg-cyan-100 dark:bg-cyan-900/50 text-cyan-600 dark:text-cyan-400',
+    pink: 'bg-pink-100 dark:bg-pink-900/50 text-pink-600 dark:text-pink-400',
+    amber: 'bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400',
+    emerald: 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400',
+  }
+  
+  const textColorClasses = {
+    purple: 'text-purple-700 dark:text-purple-300',
+    blue: 'text-blue-700 dark:text-blue-300',
+    cyan: 'text-cyan-700 dark:text-cyan-300',
+    pink: 'text-pink-700 dark:text-pink-300',
+    amber: 'text-amber-700 dark:text-amber-300',
+    emerald: 'text-emerald-700 dark:text-emerald-300',
+  }
+  
+  const valueColorClasses = {
+    purple: 'text-purple-600 dark:text-purple-400',
+    blue: 'text-blue-600 dark:text-blue-400',
+    cyan: 'text-cyan-600 dark:text-cyan-400',
+    pink: 'text-pink-600 dark:text-pink-400',
+    amber: 'text-amber-600 dark:text-amber-400',
+    emerald: 'text-emerald-600 dark:text-emerald-400',
+  }
+
+  return (
+    <div className={cn(
+      "bg-gradient-to-br rounded-xl p-3 border transition-all duration-200 hover:shadow-md hover:scale-[1.02]",
+      colorClasses[color]
+    )}>
+      <div className="flex items-center gap-2 mb-1">
+        <div className={cn("p-1.5 rounded-lg", iconColorClasses[color])}>
+          <Icon className="h-3.5 w-3.5" />
+        </div>
+        <span className={cn("text-xs font-medium", textColorClasses[color])}>{label}</span>
+      </div>
+      <p className={cn("text-xl font-bold", valueColorClasses[color])}>{value}</p>
+    </div>
+  )
+})
+
+// ============================================================================
+// STUDY TOOL CARD COMPONENT
+// ============================================================================
+
+// Study Tool Card Component with Drag-and-Drop - Memoized
+const StudyToolCard = memo(function StudyToolCard({ tool, toolIndex, courseIndex, isExpanded, onToggle, onRemove, onUpdate }: any) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ 
     id: `studytool-${courseIndex}-${toolIndex}` 
   })
 
-  const style = {
+  const style = useMemo(() => ({
     transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
     transition,
     opacity: isDragging ? 0.5 : 1,
-  }
+  }), [transform, transition, isDragging])
 
-  const getToolIcon = (type: string) => {
+  const getToolIcon = useCallback((type: string) => {
     switch(type) {
-      case 'previous_questions': return '📝'
-      case 'exam_note': return '📚'
-      case 'syllabus': return '📋'
-      case 'mark_distribution': return '📊'
-      default: return '📄'
+      case 'previous_questions': 
+        return <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+      case 'exam_note': 
+        return <BookOpen className="h-4 w-4 text-green-600 dark:text-green-400" />
+      case 'syllabus': 
+        return <GraduationCap className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+      case 'mark_distribution': 
+        return <BarChart3 className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+      default: 
+        return <FileText className="h-4 w-4 text-gray-500 dark:text-gray-400" />
     }
-  }
+  }, [])
 
-  const getToolTypeLabel = (type: string) => {
+  const getToolTypeLabel = useCallback((type: string) => {
     switch(type) {
       case 'previous_questions': return 'Previous Questions'
       case 'exam_note': return 'Exam Notes'
@@ -147,40 +232,124 @@ function StudyToolCard({ tool, toolIndex, courseIndex, isExpanded, onToggle, onR
       case 'mark_distribution': return 'Mark Distribution'
       default: return 'Document'
     }
-  }
+  }, [])
+
+  const getToolColor = useCallback((type: string) => {
+    switch(type) {
+      case 'previous_questions': return 'blue'
+      case 'exam_note': return 'green'
+      case 'syllabus': return 'purple'
+      case 'mark_distribution': return 'orange'
+      default: return 'gray'
+    }
+  }, [])
+
+  const color = getToolColor(tool.type)
+  const isSyllabus = tool.type === 'syllabus'
+  
+  // Color mapping for Tailwind classes
+  const colorStyles = useMemo(() => {
+    const colorMap: Record<string, { border: string; borderDark: string; bg: string; bgDark: string; text: string; textDark: string }> = {
+      blue: { border: 'border-l-blue-400', borderDark: 'dark:border-l-blue-600', bg: 'bg-blue-100', bgDark: 'dark:bg-blue-950/30', text: 'text-blue-700', textDark: 'dark:text-blue-300' },
+      green: { border: 'border-l-green-400', borderDark: 'dark:border-l-green-600', bg: 'bg-green-100', bgDark: 'dark:bg-green-950/30', text: 'text-green-700', textDark: 'dark:text-green-300' },
+      purple: { border: 'border-l-purple-400', borderDark: 'dark:border-l-purple-600', bg: 'bg-purple-100', bgDark: 'dark:bg-purple-950/30', text: 'text-purple-700', textDark: 'dark:text-purple-300' },
+      orange: { border: 'border-l-orange-400', borderDark: 'dark:border-l-orange-600', bg: 'bg-orange-100', bgDark: 'dark:bg-orange-950/30', text: 'text-orange-700', textDark: 'dark:text-orange-300' },
+      gray: { border: 'border-l-gray-400', borderDark: 'dark:border-l-gray-600', bg: 'bg-gray-100', bgDark: 'dark:bg-gray-950/30', text: 'text-gray-700', textDark: 'dark:text-gray-300' },
+    }
+    return colorMap[color] || colorMap.gray
+  }, [color])
 
   return (
-    <Card ref={setNodeRef} style={style} className={`border-l-4 ${isDragging ? 'border-l-blue-500 shadow-xl' : 'border-l-blue-400 dark:border-l-blue-600'} shadow-sm`}>
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-3">
-          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-2 hover:bg-accent rounded-md transition-colors flex-shrink-0">
-            <GripVertical className="h-5 w-5 text-muted-foreground" />
-          </div>
+    <Card 
+      ref={setNodeRef} 
+      style={style} 
+      className={cn(
+        "group border-l-4 transition-all duration-200",
+        isDragging 
+          ? 'border-l-blue-500 shadow-2xl scale-[1.02] ring-2 ring-blue-500/20' 
+          : `${colorStyles.border} ${colorStyles.borderDark} hover:shadow-md hover:translate-x-0.5`
+      )}
+    >
+      <CardHeader className="pb-3 pt-3">
+        <div className="flex items-center gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div 
+                {...attributes} 
+                {...listeners} 
+                className="cursor-grab active:cursor-grabbing p-1.5 hover:bg-accent rounded-lg transition-all duration-150 flex-shrink-0 group-hover:bg-accent/50"
+                aria-label="Drag to reorder"
+              >
+                <GripVertical className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              <p className="text-xs">Drag to reorder</p>
+            </TooltipContent>
+          </Tooltip>
+          
           <div 
-            className="flex-1 flex items-center justify-between cursor-pointer hover:bg-accent/50 -m-2 p-2 rounded-md transition-colors min-w-0"
+            className="flex-1 flex items-center gap-3 cursor-pointer hover:bg-accent/30 -mx-1 px-2 py-1.5 rounded-lg transition-all duration-150 min-w-0"
             onClick={onToggle}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onToggle() }}
+            aria-expanded={isExpanded}
           >
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <span className="text-2xl flex-shrink-0">{getToolIcon(tool.type)}</span>
+            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+              <div className={cn("p-1.5 rounded-lg flex-shrink-0 transition-colors", colorStyles.bg, colorStyles.bgDark)}>
+                {getToolIcon(tool.type)}
+              </div>
+              
               <div className="flex-1 min-w-0">
-                <div className="font-semibold text-base truncate">
-                  {tool.title || "Untitled Tool"}
+                <div className="font-semibold text-sm truncate mb-0.5">
+                  {tool.title || <span className="text-muted-foreground italic">Untitled Tool</span>}
                 </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                  <span>{getToolTypeLabel(tool.type)}</span>
-                  {tool.exam_type && (
-                    <>
-                      <span>•</span>
-                      <span className="capitalize">{tool.exam_type}</span>
-                    </>
-                  )}
-                </div>
+                
+                <Badge 
+                  variant="outline" 
+                  className={cn("text-xs px-2 py-0 h-5", colorStyles.text, colorStyles.textDark)}
+                >
+                  {getToolTypeLabel(tool.type)}
+                </Badge>
+              </div>
+              
+              {!isSyllabus && tool.content_url && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <a 
+                      href={tool.content_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex-shrink-0 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-950/30"
+                      aria-label="Open link in new tab"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="text-xs">Open in new tab</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+            <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+              <div className={cn(
+                "p-1 rounded-md transition-colors duration-150",
+                isExpanded ? "bg-blue-100 dark:bg-blue-900/30" : ""
+              )}>
+                {isExpanded ? (
+                  <ChevronUp className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
               </div>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <div className="p-1">
-                {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </div>
+          </div>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
               <Button 
                 variant="ghost" 
                 size="sm" 
@@ -188,324 +357,521 @@ function StudyToolCard({ tool, toolIndex, courseIndex, isExpanded, onToggle, onR
                   e.stopPropagation()
                   onRemove()
                 }} 
-                className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/30"
+                className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/30 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-all duration-150"
+                aria-label="Remove study tool"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-3.5 w-3.5" />
               </Button>
-            </div>
-          </div>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              <p className="text-xs">Remove tool</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </CardHeader>
       
       {isExpanded && (
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold flex items-center gap-2">
-                Title <span className="text-red-500 text-xs">*</span>
+        <CardContent className="space-y-4 pt-0 animate-in slide-in-from-top-2 duration-200">
+          <Separator className="bg-gradient-to-r from-transparent via-border to-transparent" />
+          
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
+            <div className={`space-y-2 ${isSyllabus ? 'sm:col-span-2' : ''}`}>
+              <Label className="text-sm font-semibold flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                Title 
+                <span className="text-red-500 text-xs">*</span>
               </Label>
               <Input 
-                placeholder="e.g., Midterm Question Bank 2024" 
+                placeholder="e.g., Course Syllabus - Fall 2024" 
                 value={tool.title} 
                 onChange={(e) => onUpdate("title", e.target.value)} 
-                className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-600 h-11" 
+                className="h-10 focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-blue-400/20 transition-shadow" 
               />
             </div>
+            
             <div className="space-y-2">
-              <Label className="text-sm font-semibold">Type</Label>
+              <Label className="text-sm font-semibold flex items-center gap-1.5">
+                <ClipboardList className="h-3.5 w-3.5 text-muted-foreground" />
+                Type
+                <span className="text-red-500 text-xs">*</span>
+              </Label>
               <Select value={tool.type} onValueChange={(value) => onUpdate("type", value)}>
-                <SelectTrigger className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 h-11">
+                <SelectTrigger className="h-10">
                   <SelectValue placeholder="Select type..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="previous_questions">📝 Previous Questions</SelectItem>
-                  <SelectItem value="exam_note">📚 Exam Notes</SelectItem>
-                  <SelectItem value="syllabus">📋 Syllabus</SelectItem>
-                  <SelectItem value="mark_distribution">📊 Mark Distribution</SelectItem>
+                  <SelectItem value="previous_questions">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-blue-600" />
+                      <span>Previous Questions</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="exam_note">
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="h-4 w-4 text-green-600" />
+                      <span>Exam Notes</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="syllabus">
+                    <div className="flex items-center gap-2">
+                      <GraduationCap className="h-4 w-4 text-purple-600" />
+                      <span>Syllabus</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="mark_distribution">
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4 text-orange-600" />
+                      <span>Mark Distribution</span>
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold flex items-center gap-2">
-                Content URL <span className="text-red-500 text-xs">*</span>
-              </Label>
-              <Input 
-                placeholder="https://drive.google.com/..." 
-                value={tool.content_url} 
-                onChange={(e) => onUpdate("content_url", e.target.value)} 
-                className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-600 h-11" 
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold">Exam Type</Label>
-              <Select value={tool.exam_type} onValueChange={(value) => onUpdate("exam_type", value)}>
-                <SelectTrigger className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 h-11">
-                  <SelectValue placeholder="Select exam type..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="midterm">🎯 Midterm</SelectItem>
-                  <SelectItem value="final">🏆 Final</SelectItem>
-                  <SelectItem value="both">✨ Both</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+
+            {!isSyllabus && (
+              <div className="space-y-2 sm:col-span-2">
+                <Label className="text-sm font-semibold flex items-center gap-1.5">
+                  <LinkIcon className="h-3.5 w-3.5" />
+                  Content URL 
+                  <span className="text-red-500 text-xs">*</span>
+                </Label>
+                <div className="flex gap-2">
+                  <Input 
+                    placeholder="https://drive.google.com/..." 
+                    value={tool.content_url} 
+                    onChange={(e) => onUpdate("content_url", e.target.value)} 
+                    className="h-10 flex-1 focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-blue-400/20 font-mono text-xs" 
+                  />
+                  {tool.content_url && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-10 px-3"
+                      asChild
+                    >
+                      <a href={tool.content_url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="space-y-2">
-            <Label className="text-sm font-semibold">Description (Optional)</Label>
+            <Label className="text-sm font-semibold flex items-center gap-1.5">
+              <FileText className="h-3.5 w-3.5" />
+              Description 
+              <span className="text-xs text-muted-foreground font-normal">(Optional)</span>
+            </Label>
             <Textarea 
-              placeholder="Add additional details about this study tool..." 
+              placeholder={isSyllabus ? "Add syllabus content here..." : "Add additional details about this study tool..."} 
               value={tool.description} 
               onChange={(e) => onUpdate("description", e.target.value)} 
-              rows={2} 
-              className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 focus:border-blue-500 dark:focus:border-blue-600 resize-none" 
+              rows={isSyllabus ? 4 : 2} 
+              className="resize-none focus:ring-2 focus:ring-blue-500/20 dark:focus:ring-blue-400/20" 
             />
+            {isSyllabus && (
+              <p className="text-xs text-muted-foreground">
+                For syllabus, add the content directly in the description field
+              </p>
+            )}
+          </div>
+
+          {/* Validation indicator */}
+          <div className="flex items-center gap-2 pt-2 border-t">
+            <div className="flex-1">
+              {tool.title && (isSyllabus || tool.content_url) ? (
+                <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                  <CheckCircle className="h-3.5 w-3.5" />
+                  <span className="font-medium">Ready to save</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  <span className="font-medium">
+                    {!tool.title && "Title required"}
+                    {tool.title && !isSyllabus && !tool.content_url && "Content URL required"}
+                  </span>
+                </div>
+              )}
+            </div>
+            {!isSyllabus && tool.content_url && (
+              <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" asChild>
+                <a href={tool.content_url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-3 w-3" />
+                  Test Link
+                </a>
+              </Button>
+            )}
           </div>
         </CardContent>
       )}
     </Card>
   )
-}
+})
 
-// Sortable Topic Component
-function SortableTopic({
-  topic,
-  topicIndex,
-  courseIndex,
-  isExpanded,
-  onToggle,
-  onRemove,
-  onUpdate,
-  onAddSlide,
-  onRemoveSlide,
-  onUpdateSlide,
-  onAddVideo,
-  onRemoveVideo,
-  onUpdateVideo,
-}: any) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: `topic-${courseIndex}-${topicIndex}` })
+// ============================================================================
+// SORTABLE TOPIC COMPONENT
+// ============================================================================
 
-  const style = {
+// Sortable Topic Component with Modern Styling - Memoized
+const SortableTopic = memo(function SortableTopic({ topic, topicIndex, courseIndex, isExpanded, onToggle, onRemove, onUpdate, onAddSlide, onRemoveSlide, onUpdateSlide, onAddVideo, onRemoveVideo, onUpdateVideo }: any) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ 
+    id: `topic-${courseIndex}-${topicIndex}` 
+  })
+
+  const style = useMemo(() => ({
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
-  }
+  }), [transform, transition, isDragging])
 
   return (
-    <Card
-      ref={setNodeRef}
-      style={style}
-      className={`border-l-4 ${isDragging ? 'border-l-purple-500 shadow-xl' : 'border-l-purple-300'}`}
+    <Card 
+      ref={setNodeRef} 
+      style={style} 
+      className={cn(
+        "border-0 overflow-hidden transition-all duration-200",
+        isDragging 
+          ? "shadow-xl ring-2 ring-purple-500 scale-[1.02]" 
+          : "bg-white/60 dark:bg-slate-800/60 shadow-sm hover:shadow-md"
+      )}
     >
-      <CardHeader className="pb-3">
-        <div className="flex items-center gap-3">
-          <div
-            {...attributes}
-            {...listeners}
-            className="cursor-grab active:cursor-grabbing p-2 hover:bg-accent rounded-md transition-colors"
-          >
-            <GripVertical className="h-5 w-5 text-muted-foreground" />
-          </div>
+      <CardHeader className="pb-3 pt-4 px-4">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div 
+                {...attributes} 
+                {...listeners} 
+                className="cursor-grab active:cursor-grabbing p-1.5 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded-lg transition-all duration-150 flex-shrink-0"
+                aria-label="Drag to reorder topic"
+              >
+                <GripVertical className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              <p className="text-xs">Drag to reorder</p>
+            </TooltipContent>
+          </Tooltip>
+          
           <div 
-            className="flex-1 flex items-center justify-between cursor-pointer hover:bg-accent/50 -m-2 p-2 rounded-md transition-colors"
+            className="flex-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-700/30 -mx-1 px-2 py-1.5 rounded-lg transition-all duration-150"
             onClick={onToggle}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onToggle() }}
+            aria-expanded={isExpanded}
           >
-            <div className="flex items-center gap-3">
-              <Badge variant="secondary" className="text-sm font-semibold">
-                Topic {topicIndex + 1}
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <Badge className="bg-gradient-to-r from-purple-600 to-violet-600 text-white rounded-md px-2.5 py-0.5 text-xs font-semibold shadow-sm">
+                {topicIndex + 1}
               </Badge>
-              <span className="font-semibold text-base">
-                {topic.title || "Untitled Topic"}
+              <span className="font-semibold text-sm sm:text-base">
+                {topic.title || <span className="text-muted-foreground italic">Untitled Topic</span>}
               </span>
-              <div className="flex gap-2 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1">
+              <div className="flex gap-2 text-xs">
+                <span className="flex items-center gap-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md">
                   <PresentationIcon className="h-3 w-3" />
                   {topic.slides.length}
                 </span>
-                <span className="flex items-center gap-1">
+                <span className="flex items-center gap-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-md">
                   <Video className="h-3 w-3" />
                   {topic.videos.length}
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="p-1">
-                {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <div className={cn(
+                "p-1.5 rounded-md transition-all duration-150",
+                isExpanded ? "bg-purple-100 dark:bg-purple-900/30" : "bg-slate-100 dark:bg-slate-800"
+              )}>
+                {isExpanded 
+                  ? <ChevronUp className="h-4 w-4 text-purple-600 dark:text-purple-400" /> 
+                  : <ChevronDown className="h-4 w-4" />
+                }
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onRemove()
-                }}
-                className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/30"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onRemove()
+                    }} 
+                    className="h-8 w-8 p-0 rounded-lg text-red-600 hover:text-red-700 hover:bg-red-100 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/30 transition-all duration-150"
+                    aria-label="Remove topic"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left">
+                  <p className="text-xs">Remove topic</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           </div>
         </div>
       </CardHeader>
       
       {isExpanded && (
-        <CardContent className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label className="text-sm font-semibold flex items-center gap-2">
-                Topic Title <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                placeholder="e.g., Introduction to Machine Learning"
-                value={topic.title}
-                onChange={(e) => onUpdate("title", e.target.value)}
-                className="h-10 dark:bg-gray-900 dark:border-gray-700 dark:focus:border-blue-600"
-              />
+        <CardContent className="space-y-4 px-3 pb-4 animate-in slide-in-from-top-2 duration-200">
+          <Separator className="bg-gradient-to-r from-transparent via-slate-200 dark:via-slate-700 to-transparent" />
+          
+          {/* Topic Details */}
+          <div className="bg-slate-50 dark:bg-slate-800/30 rounded-lg p-3 space-y-3 border border-slate-200 dark:border-slate-700">
+            <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-xs sm:text-sm font-medium flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                  <FileText className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                  Topic Title <span className="text-red-500 dark:text-red-400">*</span>
+                </Label>
+                <Input 
+                  placeholder="e.g., Introduction to Machine Learning" 
+                  value={topic.title} 
+                  onChange={(e) => onUpdate("title", e.target.value)} 
+                  className="h-9 sm:h-10 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-shadow focus:ring-2 focus:ring-purple-500/20" 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs sm:text-sm font-medium flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                  <Layers className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+                  Order Index
+                </Label>
+                <Input 
+                  type="number" 
+                  min="0" 
+                  value={topic.order_index || 0} 
+                  onChange={(e) => onUpdate("order_index", parseInt(e.target.value) || 0)} 
+                  className="h-9 sm:h-10 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-shadow focus:ring-2 focus:ring-purple-500/20" 
+                />
+              </div>
             </div>
             <div className="space-y-2">
-              <Label className="text-sm font-semibold">Order Index</Label>
-              <Input
-                type="number"
-                min="0"
-                value={topic.order_index || 0}
-                onChange={(e) => onUpdate("order_index", parseInt(e.target.value) || 0)}
-                className="h-10 dark:bg-gray-900 dark:border-gray-700 dark:focus:border-blue-600"
+              <Label className="text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-300">Description</Label>
+              <Textarea 
+                placeholder="Describe what students will learn..." 
+                value={topic.description} 
+                onChange={(e) => onUpdate("description", e.target.value)} 
+                rows={2} 
+                className="resize-none rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-shadow focus:ring-2 focus:ring-purple-500/20" 
               />
             </div>
           </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold">Description</Label>
-            <Textarea
-              placeholder="Describe what students will learn in this topic..."
-              value={topic.description}
-              onChange={(e) => onUpdate("description", e.target.value)}
-              rows={3}
-              className="resize-none dark:bg-gray-900 dark:border-gray-700 dark:focus:border-blue-600"
-            />
-          </div>
-
-          <Separator />
 
           {/* Slides Section */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-semibold flex items-center gap-2">
-                <PresentationIcon className="h-4 w-4 text-blue-600" />
-                Slides ({topic.slides.length})
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <h4 className="text-xs sm:text-sm font-semibold flex items-center gap-2 text-slate-900 dark:text-white">
+                <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/50">
+                  <PresentationIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                </div>
+                <span>Slides</span>
+                <Badge variant="secondary" className="text-xs bg-blue-100 dark:bg-blue-900/50 border border-blue-200 dark:border-blue-800/50 text-blue-700 dark:text-blue-300">{topic.slides.length}</Badge>
               </h4>
-              <Button
-                onClick={onAddSlide}
-                size="sm"
-                variant="outline"
-                className="h-8"
+              <Button 
+                onClick={onAddSlide} 
+                size="sm" 
+                className="h-8 rounded-lg bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white shadow-sm transition-all duration-150"
               >
-                <Plus className="h-3 w-3 mr-1" />
+                <Plus className="h-3.5 w-3.5 mr-1.5" />
                 Add Slide
               </Button>
             </div>
-            {topic.slides.map((slide: any, slideIndex: number) => (
-              <div key={slideIndex} className="grid gap-3 p-4 border rounded-lg bg-blue-50/30 dark:bg-blue-950/20 dark:border-blue-800">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Input
-                    placeholder="Slide title"
-                    value={slide.title}
-                    onChange={(e) => onUpdateSlide(slideIndex, "title", e.target.value)}
-                    className="h-9 bg-white dark:bg-gray-900 dark:border-gray-700 dark:focus:border-blue-600"
-                  />
-                  <Input
-                    placeholder="Google Drive/Docs URL"
-                    value={slide.url}
-                    onChange={(e) => onUpdateSlide(slideIndex, "url", e.target.value)}
-                    className="h-9 bg-white dark:bg-gray-900 dark:border-gray-700 dark:focus:border-blue-600"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Description (optional)"
-                    value={slide.description || ""}
-                    onChange={(e) => onUpdateSlide(slideIndex, "description", e.target.value)}
-                    className="h-9 bg-white dark:bg-gray-900 dark:border-gray-700 dark:focus:border-blue-600 flex-1"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onRemoveSlide(slideIndex)}
-                    className="h-9 text-red-600 hover:text-red-700 hover:bg-red-100 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/30"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+            
+            {topic.slides.length === 0 ? (
+              <div className="text-center py-8 sm:py-10 border-2 border-dashed border-blue-200 dark:border-blue-800/50 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 transition-colors hover:border-blue-300 dark:hover:border-blue-700">
+                <PresentationIcon className="h-8 w-8 sm:h-10 sm:w-10 text-blue-400 dark:text-blue-700 mx-auto mb-3" />
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mb-3">No slides added yet</p>
+                <Button 
+                  onClick={onAddSlide} 
+                  variant="outline" 
+                  size="sm"
+                  className="border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30"
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                  Add Your First Slide
+                </Button>
               </div>
-            ))}
+            ) : (
+              <div className="space-y-2">
+                {topic.slides.map((slide: any, slideIndex: number) => (
+                  <div 
+                    key={slideIndex} 
+                    className="grid gap-2 p-3 border border-blue-200 dark:border-blue-800/50 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 group hover:shadow-sm transition-all duration-150"
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge variant="outline" className="text-xs bg-white dark:bg-slate-800/50 border-blue-200 dark:border-blue-800/50 text-blue-600 dark:text-blue-300">
+                        Slide {slideIndex + 1}
+                      </Badge>
+                      {slide.url && (
+                        <a 
+                          href={slide.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 transition-colors"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      )}
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Input 
+                        placeholder="Slide title" 
+                        value={slide.title} 
+                        onChange={(e) => onUpdateSlide(slideIndex, "title", e.target.value)} 
+                        className="h-9 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-shadow focus:ring-2 focus:ring-blue-500/20" 
+                      />
+                      <Input 
+                        placeholder="Google Drive/Docs URL" 
+                        value={slide.url} 
+                        onChange={(e) => onUpdateSlide(slideIndex, "url", e.target.value)} 
+                        className="h-9 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 font-mono text-xs transition-shadow focus:ring-2 focus:ring-blue-500/20" 
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Input 
+                        placeholder="Description (optional)" 
+                        value={slide.description || ""} 
+                        onChange={(e) => onUpdateSlide(slideIndex, "description", e.target.value)} 
+                        className="h-9 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 flex-1 transition-shadow focus:ring-2 focus:ring-blue-500/20" 
+                      />
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => onRemoveSlide(slideIndex)} 
+                            className="h-9 w-9 p-0 rounded-lg text-red-600 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-950/30 opacity-60 group-hover:opacity-100 transition-all duration-150"
+                            aria-label="Remove slide"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs">Remove slide</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          <Separator />
+          <Separator className="bg-gradient-to-r from-transparent via-slate-200 dark:via-slate-700 to-transparent" />
 
           {/* Videos Section */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h4 className="text-sm font-semibold flex items-center gap-2">
-                <Video className="h-4 w-4 text-purple-600" />
-                Videos ({topic.videos.length})
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <h4 className="text-xs sm:text-sm font-semibold flex items-center gap-2 text-slate-900 dark:text-white">
+                <div className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/50">
+                  <Video className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                </div>
+                <span>Videos</span>
+                <Badge variant="secondary" className="text-xs bg-purple-100 dark:bg-purple-900/50 border border-purple-200 dark:border-purple-800/50 text-purple-700 dark:text-purple-300">{topic.videos.length}</Badge>
               </h4>
-              <Button
-                onClick={onAddVideo}
-                size="sm"
-                variant="outline"
-                className="h-8"
+              <Button 
+                onClick={onAddVideo} 
+                size="sm" 
+                className="h-8 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white shadow-sm transition-all duration-150"
               >
-                <Plus className="h-3 w-3 mr-1" />
+                <Plus className="h-3.5 w-3.5 mr-1.5" />
                 Add Video
               </Button>
             </div>
-            {topic.videos.map((video: any, videoIndex: number) => (
-              <div key={videoIndex} className="grid gap-3 p-4 border rounded-lg bg-purple-50/30 dark:bg-purple-950/20 dark:border-purple-800">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <Input
-                    placeholder="Video title"
-                    value={video.title}
-                    onChange={(e) => onUpdateVideo(videoIndex, "title", e.target.value)}
-                    className="h-9 bg-white dark:bg-gray-900 dark:border-gray-700 dark:focus:border-blue-600"
-                  />
-                  <Input
-                    placeholder="YouTube/Video URL"
-                    value={video.url}
-                    onChange={(e) => onUpdateVideo(videoIndex, "url", e.target.value)}
-                    className="h-9 bg-white dark:bg-gray-900 dark:border-gray-700 dark:focus:border-blue-600"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Description (optional)"
-                    value={video.description || ""}
-                    onChange={(e) => onUpdateVideo(videoIndex, "description", e.target.value)}
-                    className="h-9 bg-white dark:bg-gray-900 dark:border-gray-700 dark:focus:border-blue-600 flex-1"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onRemoveVideo(videoIndex)}
-                    className="h-9 text-red-600 hover:text-red-700 hover:bg-red-100 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/30"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+            
+            {topic.videos.length === 0 ? (
+              <div className="text-center py-8 sm:py-10 border-2 border-dashed border-purple-200 dark:border-purple-800/50 rounded-xl bg-purple-50/50 dark:bg-purple-950/20 transition-colors hover:border-purple-300 dark:hover:border-purple-700">
+                <Video className="h-8 w-8 sm:h-10 sm:w-10 text-purple-400 dark:text-purple-700 mx-auto mb-3" />
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mb-3">No videos added yet</p>
+                <Button 
+                  onClick={onAddVideo} 
+                  variant="outline" 
+                  size="sm"
+                  className="border-purple-300 dark:border-purple-700 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30"
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                  Add Your First Video
+                </Button>
               </div>
-            ))}
+            ) : (
+              <div className="space-y-2">
+                {topic.videos.map((video: any, videoIndex: number) => (
+                  <div 
+                    key={videoIndex} 
+                    className="grid gap-2 p-3 border border-purple-200 dark:border-purple-800/50 rounded-lg bg-purple-50/50 dark:bg-purple-950/20 group hover:shadow-sm transition-all duration-150"
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge variant="outline" className="text-xs bg-white dark:bg-slate-800/50 border-purple-200 dark:border-purple-800/50 text-purple-600 dark:text-purple-300">
+                        Video {videoIndex + 1}
+                      </Badge>
+                      {video.url && (
+                        <a 
+                          href={video.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-purple-500 dark:text-purple-400 hover:text-purple-600 dark:hover:text-purple-300 transition-colors"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      )}
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Input 
+                        placeholder="Video title" 
+                        value={video.title} 
+                        onChange={(e) => onUpdateVideo(videoIndex, "title", e.target.value)} 
+                        className="h-9 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-shadow focus:ring-2 focus:ring-purple-500/20" 
+                      />
+                      <Input 
+                        placeholder="YouTube/Video URL" 
+                        value={video.url} 
+                        onChange={(e) => onUpdateVideo(videoIndex, "url", e.target.value)} 
+                        className="h-9 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 font-mono text-xs transition-shadow focus:ring-2 focus:ring-purple-500/20" 
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Input 
+                        placeholder="Description (optional)" 
+                        value={video.description || ""} 
+                        onChange={(e) => onUpdateVideo(videoIndex, "description", e.target.value)} 
+                        className="h-9 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 flex-1 transition-shadow focus:ring-2 focus:ring-purple-500/20" 
+                      />
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => onRemoveVideo(videoIndex)} 
+                            className="h-9 w-9 p-0 rounded-lg text-red-600 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-950/30 opacity-60 group-hover:opacity-100 transition-all duration-150"
+                            aria-label="Remove video"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-xs">Remove video</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </CardContent>
       )}
     </Card>
   )
-}
+})
+// ============================================================================
+// MAIN CREATE PAGE COMPONENT
+// ============================================================================
 
 export default function CreateBulkCreatorPage() {
   const router = useRouter()
@@ -946,43 +1312,43 @@ export default function CreateBulkCreatorPage() {
   }
 
   return (
-    <div className="w-full px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-4 mb-6">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => router.push('/dashboard/create/bulk')}
-            className="h-10 w-10 rounded-lg"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          
-          <div className="flex-1">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-                <Plus className="h-5 w-5" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight">
-                  Create New Semester
-                </h1>
-                <p className="text-sm text-muted-foreground">
-                  Build a complete semester with courses, topics, materials, and study tools
-                </p>
+    <TooltipProvider>
+      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 max-w-[1400px] mx-auto">
+        {/* Header */}
+        <div className="mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-6">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => router.push('/dashboard/create/bulk')}
+              className="h-10 w-10 rounded-lg self-start"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            
+            <div className="flex-1">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 text-white shadow-lg">
+                  <Plus className="h-5 w-5" />
+                </div>
+                <div>
+                  <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
+                    Create New Semester
+                  </h1>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    Build a complete semester with courses, topics, materials, and study tools
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   onClick={loadDemoData}
                   variant="outline"
                   size="sm"
-                  className="h-9"
+                  className="h-9 self-start sm:self-auto"
                   disabled={contributorNotApproved || contributorMissingContext}
                 >
                   <Sparkles className="h-4 w-4 mr-2" />
@@ -993,124 +1359,130 @@ export default function CreateBulkCreatorPage() {
                 <p className="text-sm">Load sample data to see how it works</p>
               </TooltipContent>
             </Tooltip>
-          </TooltipProvider>
+          </div>
         </div>
-      </div>
 
-      {/* Loading State */}
-      {isLoadingUser && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        </div>
-      )}
+        {/* Loading State */}
+        {isLoadingUser && (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          </div>
+        )}
 
-      {/* Contributor Context Banner */}
-      {!isLoadingUser && isContributor && (
-        <div className="mb-6 space-y-4">
-          {/* Show department/batch context */}
-          {contributorHasContext && (
-            <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800">
-              <Info className="h-4 w-4 text-blue-600" />
-              <AlertTitle className="text-blue-900 dark:text-blue-100">Creating content for your section</AlertTitle>
-              <AlertDescription className="text-blue-700 dark:text-blue-300">
-                <div className="flex items-center gap-4 mt-2">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4" />
-                    <span className="font-medium">{userContext?.department?.short_name || userContext?.department?.name}</span>
+        {/* Contributor Context Banner */}
+        {!isLoadingUser && isContributor && (
+          <div className="mb-6 space-y-4">
+            {/* Show department/batch context */}
+            {contributorHasContext && (
+              <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800">
+                <Info className="h-4 w-4 text-blue-600" />
+                <AlertTitle className="text-blue-900 dark:text-blue-100">Creating content for your section</AlertTitle>
+                <AlertDescription className="text-blue-700 dark:text-blue-300">
+                  <div className="flex items-center gap-4 mt-2">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4" />
+                      <span className="font-medium">{userContext?.department?.short_name || userContext?.department?.name}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      <span className="font-medium">{userContext?.batch?.batch_name}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    <span className="font-medium">{userContext?.batch?.batch_name}</span>
-                  </div>
+                  <p className="mt-2 text-sm">
+                    All content you create will be associated with your department and batch.
+                  </p>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Warning: Missing department/batch */}
+            {contributorMissingContext && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Setup Required</AlertTitle>
+                <AlertDescription>
+                  Your account is not yet assigned to a department and batch. Please contact an administrator to complete your account setup before creating content.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Warning: Not approved */}
+            {contributorNotApproved && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Account Pending Approval</AlertTitle>
+                <AlertDescription>
+                  Your account is pending approval. You will be able to create content once an administrator approves your account.
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+        )}
+
+        {/* Admin Info Banner */}
+        {!isLoadingUser && isAdmin && (
+          <Alert className="mb-6 border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-800">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+            <AlertTitle className="text-green-900 dark:text-green-100">Admin Access</AlertTitle>
+            <AlertDescription className="text-green-700 dark:text-green-300">
+              As an admin, you can create content that is available globally across all departments and batches.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div className="space-y-6">
+          {/* Semester Info */}
+          <Card>
+            <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-950/30 dark:to-cyan-950/30 border-b">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-600 shadow-lg">
+                  <GraduationCap className="h-5 w-5 text-white" />
                 </div>
-                <p className="mt-2 text-sm">
-                  All content you create will be associated with your department and batch.
-                </p>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Warning: Missing department/batch */}
-          {contributorMissingContext && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Setup Required</AlertTitle>
-              <AlertDescription>
-                Your account is not yet assigned to a department and batch. Please contact an administrator to complete your account setup before creating content.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Warning: Not approved */}
-          {contributorNotApproved && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Account Pending Approval</AlertTitle>
-              <AlertDescription>
-                Your account is pending approval. You will be able to create content once an administrator approves your account.
-              </AlertDescription>
-            </Alert>
-          )}
-        </div>
-      )}
-
-      {/* Admin Info Banner */}
-      {!isLoadingUser && isAdmin && (
-        <Alert className="mb-6 border-green-200 bg-green-50 dark:bg-green-950/30 dark:border-green-800">
-          <CheckCircle className="h-4 w-4 text-green-600" />
-          <AlertTitle className="text-green-900 dark:text-green-100">Admin Access</AlertTitle>
-          <AlertDescription className="text-green-700 dark:text-green-300">
-            As an admin, you can create content that is available globally across all departments and batches.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <div className="space-y-6">
-        {/* Semester Info */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                <BookOpen className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <div>
+                  <CardTitle className="text-lg">Semester Information</CardTitle>
+                  <CardDescription>Basic details about the semester</CardDescription>
+                </div>
               </div>
-              <div>
-                <CardTitle className="text-lg">Semester Information</CardTitle>
-                <CardDescription>Basic details about the semester</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium flex items-center gap-2">
+                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                    Semester Title <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    placeholder="e.g., Fall 2025"
+                    value={formData.semester.title}
+                    onChange={(e) => setFormData(prev => ({
+                      ...prev,
+                      semester: { ...prev.semester, title: e.target.value }
+                    }))}
+                    className="h-10"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium flex items-center gap-2">
+                    <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                    Section <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    placeholder="e.g., 63 G"
+                    value={formData.semester.section}
+                    onChange={(e) => setFormData(prev => ({
+                      ...prev,
+                      semester: { ...prev.semester, section: e.target.value }
+                    }))}
+                    className="h-10"
+                  />
+                </div>
               </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
+
               <div className="space-y-2">
-                <Label className="text-sm font-medium">
-                  Semester Title <span className="text-red-500">*</span>
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                  Description
                 </Label>
-                <Input
-                  placeholder="e.g., Fall 2025"
-                  value={formData.semester.title}
-                  onChange={(e) => setFormData(prev => ({
-                    ...prev,
-                    semester: { ...prev.semester, title: e.target.value }
-                  }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">
-                  Section <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  placeholder="e.g., 63 G"
-                  value={formData.semester.section}
-                  onChange={(e) => setFormData(prev => ({
-                    ...prev,
-                    semester: { ...prev.semester, section: e.target.value }
-                  }))}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Description</Label>
               <Textarea
                 placeholder="Describe the semester..."
                 value={formData.semester.description}
@@ -1125,7 +1497,10 @@ export default function CreateBulkCreatorPage() {
 
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-2">
-                <Label className="text-sm font-medium">Start Date</Label>
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                  Start Date
+                </Label>
                 <Input
                   type="date"
                   value={formData.semester.start_date}
@@ -1133,10 +1508,14 @@ export default function CreateBulkCreatorPage() {
                     ...prev,
                     semester: { ...prev.semester, start_date: e.target.value }
                   }))}
+                  className="h-10"
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-sm font-medium">End Date</Label>
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                  End Date
+                </Label>
                 <Input
                   type="date"
                   value={formData.semester.end_date}
@@ -1144,6 +1523,7 @@ export default function CreateBulkCreatorPage() {
                     ...prev,
                     semester: { ...prev.semester, end_date: e.target.value }
                   }))}
+                  className="h-10"
                 />
               </div>
               <div className="space-y-2">
@@ -1157,14 +1537,15 @@ export default function CreateBulkCreatorPage() {
                     ...prev,
                     semester: { ...prev.semester, default_credits: parseInt(e.target.value) || 3 }
                   }))}
+                  className="h-10"
                 />
               </div>
             </div>
 
             <Separator />
 
-            <div className="flex flex-wrap gap-6">
-              <div className="flex items-center gap-3">
+            <div className="flex flex-wrap gap-4 sm:gap-6">
+              <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-200 dark:border-blue-800/50">
                 <Switch
                   checked={formData.semester.has_midterm}
                   onCheckedChange={(checked) => setFormData(prev => ({
@@ -1172,9 +1553,9 @@ export default function CreateBulkCreatorPage() {
                     semester: { ...prev.semester, has_midterm: checked }
                   }))}
                 />
-                <Label className="text-sm cursor-pointer">Has Midterm Exam</Label>
+                <Label className="text-sm cursor-pointer">Has Midterm</Label>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 bg-purple-50 dark:bg-purple-900/20 px-4 py-2 rounded-lg border border-purple-200 dark:border-purple-800/50">
                 <Switch
                   checked={formData.semester.has_final}
                   onCheckedChange={(checked) => setFormData(prev => ({
@@ -1182,9 +1563,9 @@ export default function CreateBulkCreatorPage() {
                     semester: { ...prev.semester, has_final: checked }
                   }))}
                 />
-                <Label className="text-sm cursor-pointer">Has Final Exam</Label>
+                <Label className="text-sm cursor-pointer">Has Final</Label>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-2 rounded-lg border border-emerald-200 dark:border-emerald-800/50">
                 <Switch
                   checked={formData.semester.is_active}
                   onCheckedChange={(checked) => setFormData(prev => ({
@@ -1192,193 +1573,263 @@ export default function CreateBulkCreatorPage() {
                     semester: { ...prev.semester, is_active: checked }
                   }))}
                 />
-                <Label className="text-sm cursor-pointer">Set as Active</Label>
+                <Label className="text-sm cursor-pointer">✨ Set as Active</Label>
               </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Courses Section */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
+        <Card className="border-l-4 border-l-purple-500">
+          <CardHeader className="bg-gradient-to-r from-purple-50 to-violet-50 dark:from-purple-950/30 dark:to-violet-950/30 border-b-2 border-purple-200 dark:border-purple-800">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
-                  <BookOpen className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                <div className="p-2 rounded-lg bg-gradient-to-br from-purple-600 to-violet-600 shadow-lg">
+                  <BookOpen className="h-5 w-5 text-white" />
                 </div>
                 <div>
                   <CardTitle className="text-lg flex items-center gap-2">
                     Courses
-                    <Badge variant="secondary">{formData.courses.length}</Badge>
+                    <Badge className="bg-purple-100 dark:bg-purple-900/50 border border-purple-200 dark:border-purple-800/50 text-purple-700 dark:text-purple-300">
+                      {formData.courses.length}
+                    </Badge>
                   </CardTitle>
                   <CardDescription>Add courses with topics and materials</CardDescription>
                 </div>
               </div>
-              <Button onClick={addCourse} size="sm" className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
+              <Button 
+                onClick={addCourse} 
+                size="sm" 
+                className="h-9 rounded-lg bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 shadow-lg shadow-purple-500/20 transition-all duration-200"
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Course
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 sm:p-6">
             {formData.courses.length === 0 ? (
-              <div className="text-center py-12 border-2 border-dashed rounded-lg">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                  <BookOpen className="h-8 w-8 text-purple-400" />
+              <div className="text-center py-12 sm:py-16 border-2 border-dashed border-purple-200 dark:border-purple-700/50 rounded-xl sm:rounded-2xl bg-purple-50/50 dark:bg-purple-900/20 transition-colors hover:border-purple-300 dark:hover:border-purple-600/50">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 rounded-2xl bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center shadow-lg">
+                  <BookOpen className="h-8 w-8 sm:h-10 sm:w-10 text-purple-600 dark:text-purple-400" />
                 </div>
-                <p className="text-muted-foreground mb-4">No courses added yet</p>
-                <Button onClick={addCourse} size="sm" className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
-                  <Plus className="h-4 w-4 mr-2" />
+                <h3 className="text-base sm:text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">No courses yet</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 sm:mb-6 max-w-sm mx-auto px-4">Start building your semester by adding your first course with topics and materials</p>
+                <Button 
+                  onClick={addCourse} 
+                  size="lg"
+                  className="h-11 rounded-xl bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-700 hover:to-violet-700 shadow-lg shadow-purple-500/20"
+                >
+                  <Plus className="h-5 w-5 mr-2" />
                   Add Your First Course
                 </Button>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 {formData.courses.map((course, courseIndex) => (
-                  <Card key={courseIndex}>
-                    <CardHeader className="pb-3">
+                  <Card 
+                    key={courseIndex}
+                    className={cn(
+                      "overflow-hidden transition-all duration-200 border-2 shadow-md hover:shadow-lg",
+                      course.is_highlighted
+                        ? "border-amber-400 dark:border-amber-600 bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/20 dark:to-yellow-950/20"
+                        : "border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800/50",
+                      expandedCourse === courseIndex 
+                        ? "ring-4 ring-purple-400 dark:ring-purple-500/40 shadow-xl border-purple-500" 
+                        : ""
+                    )}
+                  >
+                    <CardHeader className={cn(
+                      "pb-3 border-b-2 p-3 sm:p-4",
+                      course.is_highlighted
+                        ? "bg-gradient-to-r from-amber-100 to-yellow-100 dark:from-amber-900/30 dark:to-yellow-900/30 border-amber-300 dark:border-amber-700"
+                        : "bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-800/70 dark:to-slate-800/50 border-slate-300 dark:border-slate-700"
+                    )}>
                       <div 
-                        className="flex items-center justify-between gap-3 cursor-pointer"
+                        className="flex items-center justify-between gap-3 cursor-pointer group"
                         onClick={() => setExpandedCourse(expandedCourse === courseIndex ? null : courseIndex)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setExpandedCourse(expandedCourse === courseIndex ? null : courseIndex) }}
+                        aria-expanded={expandedCourse === courseIndex}
                       >
                         <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0">
-                          <Badge variant="secondary" className="shrink-0">Course {courseIndex + 1}</Badge>
-                          <span className="font-semibold truncate">
-                            {course.title || "Untitled Course"}
+                          <Badge className="shrink-0 bg-gradient-to-r from-purple-600 to-violet-600 text-white border-0">
+                            {courseIndex + 1}
+                          </Badge>
+                          <span className="font-semibold truncate text-sm sm:text-base">
+                            {course.title || <span className="text-muted-foreground italic">Untitled Course</span>}
                           </span>
                           {course.course_code && (
-                            <Badge variant="outline" className="font-mono text-xs shrink-0">
+                            <Badge variant="outline" className="font-mono text-xs shrink-0 bg-white dark:bg-slate-700/50 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300">
                               {course.course_code}
                             </Badge>
                           )}
                           {course.is_highlighted && (
-                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 shrink-0" />
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400 shrink-0 drop-shadow-sm" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">Highlighted course</p>
+                              </TooltipContent>
+                            </Tooltip>
                           )}
                           <div className="flex gap-2 text-xs text-muted-foreground ml-auto">
-                            <span className="flex items-center gap-1">
-                              <FileText className="h-3 w-3" />
-                              {course.topics.length}
+                            <span className="flex items-center gap-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-md">
+                              <Layers className="h-3 w-3" />
+                              {course.topics?.length || 0}
                             </span>
-                            <span className="flex items-center gap-1">
+                            <span className="flex items-center gap-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md">
                               <ClipboardList className="h-3 w-3" />
-                              {course.studyTools.length}
+                              {course.studyTools?.length || 0}
                             </span>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          {expandedCourse === courseIndex ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              removeCourse(courseIndex)
-                            }}
-                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className={cn(
+                            "p-1.5 rounded-lg transition-all duration-150",
+                            expandedCourse === courseIndex 
+                              ? "bg-purple-100 dark:bg-purple-900/50" 
+                              : "bg-slate-100 dark:bg-slate-700/50 group-hover:bg-slate-200 dark:group-hover:bg-slate-600/50"
+                          )}>
+                            {expandedCourse === courseIndex 
+                              ? <ChevronUp className="h-4 w-4 text-purple-600 dark:text-purple-400" /> 
+                              : <ChevronDown className="h-4 w-4" />
+                            }
+                          </div>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  removeCourse(courseIndex)
+                                }}
+                                className="h-8 w-8 p-0 rounded-lg text-red-600 hover:text-red-700 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-950/30 opacity-60 group-hover:opacity-100 transition-all duration-150"
+                                aria-label="Remove course"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="left">
+                              <p className="text-xs">Remove course</p>
+                            </TooltipContent>
+                          </Tooltip>
                         </div>
                       </div>
                     </CardHeader>
 
                     {expandedCourse === courseIndex && (
-                      <CardContent className="space-y-6 pt-0">
-                        <Separator />
+                      <CardContent className="space-y-4 pt-0 pb-4 px-3 sm:px-4 animate-in slide-in-from-top-2 duration-200">
+                        <Separator className="bg-gradient-to-r from-transparent via-slate-200 dark:via-slate-700 to-transparent" />
                         
                         {/* Course Basic Info */}
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <div className="space-y-2">
-                            <Label className="flex items-center gap-2 text-sm">
-                              Title <span className="text-red-500">*</span>
-                            </Label>
-                            <Input
-                              placeholder="e.g., Data Structures"
-                              value={course.title}
-                              onChange={(e) => updateCourse(courseIndex, "title", e.target.value)}
-                              className="h-10"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="flex items-center gap-2 text-sm">
-                              Course Code <span className="text-red-500">*</span>
-                            </Label>
-                            <Input
-                              placeholder="e.g., CSE201"
-                              value={course.course_code}
-                              onChange={(e) => updateCourse(courseIndex, "course_code", e.target.value)}
-                              className="h-10"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="flex items-center gap-2 text-sm">
-                              Teacher Name <span className="text-red-500">*</span>
-                            </Label>
-                            <Input
-                              placeholder="e.g., Dr. John Doe"
-                              value={course.teacher_name}
-                              onChange={(e) => updateCourse(courseIndex, "teacher_name", e.target.value)}
-                              className="h-10"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Teacher Email</Label>
-                            <Input
-                              placeholder="teacher@example.com"
-                              type="email"
-                              value={course.teacher_email}
-                              onChange={(e) => updateCourse(courseIndex, "teacher_email", e.target.value)}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Credits</Label>
-                            <Input
-                              type="number"
-                              min="1"
-                              max="6"
-                              value={course.credits}
-                              onChange={(e) => updateCourse(courseIndex, "credits", parseInt(e.target.value) || 3)}
-                            />
-                          </div>
-                          <div className="space-y-2 flex items-end">
-                            <div className="flex items-center gap-3">
-                              <Switch
-                                checked={course.is_highlighted}
-                                onCheckedChange={(checked) => updateCourse(courseIndex, "is_highlighted", checked)}
-                              />
-                              <Label className="flex items-center gap-2 cursor-pointer">
-                                <Star className="h-4 w-4" />
-                                Highlight Course
+                        <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3 sm:p-4 space-y-3 sm:space-y-4 border-2 border-blue-200 dark:border-blue-800/50">
+                          <h5 className="text-sm font-bold text-blue-900 dark:text-blue-200 flex items-center gap-2">
+                            <div className="p-2 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-600 shadow-md">
+                              <Users className="h-4 w-4 text-white" />
+                            </div>
+                            Course Details
+                          </h5>
+                          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2">
+                            <div className="space-y-2">
+                              <Label className="flex items-center gap-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300">
+                                Title <span className="text-red-500 dark:text-red-400">*</span>
                               </Label>
+                              <Input
+                                placeholder="e.g., Data Structures"
+                                value={course.title}
+                                onChange={(e) => updateCourse(courseIndex, "title", e.target.value)}
+                                className="h-9 sm:h-10 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="flex items-center gap-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300">
+                                Course Code <span className="text-red-500 dark:text-red-400">*</span>
+                              </Label>
+                              <Input
+                                placeholder="e.g., CSE201"
+                                value={course.course_code}
+                                onChange={(e) => updateCourse(courseIndex, "course_code", e.target.value)}
+                                className="h-9 sm:h-10 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 font-mono"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="flex items-center gap-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300">
+                                Teacher Name <span className="text-red-500 dark:text-red-400">*</span>
+                              </Label>
+                              <Input
+                                placeholder="e.g., Dr. John Doe"
+                                value={course.teacher_name}
+                                onChange={(e) => updateCourse(courseIndex, "teacher_name", e.target.value)}
+                                className="h-9 sm:h-10 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs sm:text-sm text-slate-700 dark:text-slate-300">Teacher Email</Label>
+                              <Input
+                                placeholder="teacher@example.com"
+                                type="email"
+                                value={course.teacher_email}
+                                onChange={(e) => updateCourse(courseIndex, "teacher_email", e.target.value)}
+                                className="h-9 sm:h-10 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-xs sm:text-sm text-slate-700 dark:text-slate-300">Credits</Label>
+                              <Input
+                                type="number"
+                                min="1"
+                                max="6"
+                                value={course.credits}
+                                onChange={(e) => updateCourse(courseIndex, "credits", parseInt(e.target.value) || 3)}
+                                className="h-9 sm:h-10 rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white"
+                              />
+                            </div>
+                            <div className="space-y-2 flex items-end">
+                              <div className="flex items-center gap-3 bg-yellow-50 dark:bg-yellow-900/30 px-3 sm:px-4 py-2 rounded-lg border border-yellow-200 dark:border-yellow-700/50">
+                                <Switch
+                                  checked={course.is_highlighted}
+                                  onCheckedChange={(checked) => updateCourse(courseIndex, "is_highlighted", checked)}
+                                />
+                                <Label className="flex items-center gap-2 cursor-pointer text-xs sm:text-sm text-yellow-700 dark:text-yellow-300">
+                                  <Star className="h-4 w-4 text-yellow-500" />
+                                  Highlight Course
+                                </Label>
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="space-y-2">
-                          <Label>Description</Label>
-                          <Textarea
-                            placeholder="Course description..."
+                          <div className="space-y-2">
+                            <Label className="text-xs sm:text-sm text-slate-700 dark:text-slate-300">Description</Label>
+                            <Textarea
+                              placeholder="Course description..."
                             value={course.description}
-                            onChange={(e) => updateCourse(courseIndex, "description", e.target.value)}
-                            rows={2}
-                          />
+                              onChange={(e) => updateCourse(courseIndex, "description", e.target.value)}
+                              rows={2}
+                              className="resize-none rounded-lg bg-white dark:bg-slate-900/50 border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                            />
+                          </div>
                         </div>
-
-                        <Separator />
 
                         {/* Topics Section */}
-                        <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-semibold flex items-center gap-2">
-                              <FileText className="h-4 w-4 text-purple-600" />
-                              Topics ({course.topics.length})
+                        <div className="space-y-4 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/20 dark:to-purple-950/20 rounded-lg p-4 border-2 border-indigo-200 dark:border-indigo-800">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <h4 className="text-lg font-bold flex items-center gap-2 text-indigo-900 dark:text-indigo-200">
+                              <div className="p-2 rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 shadow-md">
+                                <Layers className="h-5 w-5 text-white" />
+                              </div>
+                              Topics
+                              <Badge className="ml-1 bg-indigo-600 text-white border-0">{course.topics?.length || 0}</Badge>
                             </h4>
                             <Button
                               onClick={() => addTopic(courseIndex)}
                               size="sm"
-                              variant="outline"
+                              className="h-9 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-md"
                             >
-                              <Plus className="h-3 w-3 mr-1" />
+                              <Plus className="h-4 w-4 mr-1.5" />
                               Add Topic
                             </Button>
                           </div>
@@ -1444,32 +1895,36 @@ export default function CreateBulkCreatorPage() {
 
                         {/* Study Tools Section */}
                         <div className="space-y-4">
-                          <div className="flex items-center justify-between">
-                            <h4 className="font-semibold flex items-center gap-2">
-                              <ClipboardList className="h-4 w-4 text-blue-600" />
-                              Study Tools ({course.studyTools.length})
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <h4 className="font-semibold flex items-center gap-2 text-slate-900 dark:text-slate-200">
+                              <div className="p-1.5 rounded-md bg-blue-100 dark:bg-blue-900/50">
+                                <ClipboardList className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                              </div>
+                              Study Tools
+                              <Badge variant="secondary" className="ml-1 bg-blue-100 dark:bg-blue-900/50 border border-blue-200 dark:border-blue-700/50 text-blue-700 dark:text-blue-300">{course.studyTools?.length || 0}</Badge>
                             </h4>
                             <Button
                               onClick={() => addStudyTool(courseIndex)}
                               size="sm"
-                              className="bg-blue-600 hover:bg-blue-700 text-white"
+                              className="h-9 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
                             >
-                              <Plus className="h-4 w-4 mr-1" />
+                              <Plus className="h-3.5 w-3.5 mr-1.5" />
                               Add Tool
                             </Button>
                           </div>
 
                           {course.studyTools.length === 0 ? (
-                            <div className="text-center py-8 border-2 border-dashed border-blue-200 dark:border-blue-800 rounded-lg bg-blue-50/30 dark:bg-blue-950/20">
-                              <ClipboardList className="h-12 w-12 text-blue-300 dark:text-blue-600 mx-auto mb-3" />
-                              <p className="text-sm text-muted-foreground mb-3">No study tools added yet</p>
+                            <div className="text-center py-12 border-2 border-dashed border-blue-200 dark:border-blue-700/50 rounded-xl bg-blue-50/50 dark:bg-blue-900/20">
+                              <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
+                                <ClipboardList className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                              </div>
+                              <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">No study tools added</p>
                               <Button 
                                 onClick={() => addStudyTool(courseIndex)} 
                                 size="sm" 
-                                variant="outline"
-                                className="border-blue-300 dark:border-blue-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30"
+                                className="h-9 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
                               >
-                                <Plus className="h-4 w-4 mr-1" />
+                                <Plus className="h-4 w-4 mr-1.5" />
                                 Add Your First Tool
                               </Button>
                             </div>
@@ -1483,7 +1938,7 @@ export default function CreateBulkCreatorPage() {
                                 items={course.studyTools.map((_, idx) => `studytool-${courseIndex}-${idx}`)}
                                 strategy={verticalListSortingStrategy}
                               >
-                                <div className="space-y-3">
+                                <div className="space-y-2">
                                   {course.studyTools.map((tool, toolIndex) => (
                                     <StudyToolCard
                                       key={toolIndex}
@@ -1524,48 +1979,51 @@ export default function CreateBulkCreatorPage() {
           </CardContent>
         </Card>
 
-        {/* Action Buttons */}
-        <Card className="sticky bottom-4 shadow-lg">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between gap-4">
+        {/* Sticky Action Bar */}
+        <div className="sticky bottom-0 z-30 mt-6 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 shadow-lg rounded-t-xl">
+          <div className="p-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <Button
+              variant="outline"
+              onClick={() => router.push('/dashboard/create/bulk')}
+              className="flex-1 sm:flex-none"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Cancel
+            </Button>
+            
+            <div className="flex items-center justify-between sm:justify-end gap-3">
+              {formData.courses.length > 0 && (
+                <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <span>
+                    {formData.courses.length} course{formData.courses.length !== 1 ? 's' : ''} ready
+                  </span>
+                </div>
+              )}
+              
               <Button
-                variant="ghost"
-                onClick={() => router.push('/dashboard/create/bulk')}
+                onClick={handleSubmit}
+                disabled={isCreating || !canSubmit || !formData.semester.title || !formData.semester.section || formData.courses.length === 0}
+                size="lg"
+                className="w-full sm:w-auto bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg"
               >
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Cancel
-              </Button>
-              <div className="flex items-center gap-3">
-                {formData.courses.length > 0 && (
-                  <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                    <span>
-                      {formData.courses.length} course{formData.courses.length !== 1 ? 's' : ''} ready
-                    </span>
-                  </div>
+                {isCreating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Create Semester
+                  </>
                 )}
-                <Button
-                  onClick={handleSubmit}
-                  disabled={isCreating || !canSubmit || !formData.semester.title || !formData.semester.section || formData.courses.length === 0}
-                  className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700"
-                >
-                  {isCreating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      Create Semester
-                    </>
-                  )}
-                </Button>
-              </div>
+              </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
+    </TooltipProvider>
   )
 }
