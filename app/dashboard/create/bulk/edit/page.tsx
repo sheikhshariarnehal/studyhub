@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -99,12 +100,44 @@ const batchUpdate = (fn: () => void) => {
   startTransition(() => fn())
 }
 
+// Generate semester title based on selected semester and current date
+const generateSemesterTitle = (semesterType: SemesterType): string => {
+  if (!semesterType) return ""
+  const currentDate = new Date()
+  const currentYear = currentDate.getFullYear()
+  return `${semesterType} ${currentYear}`
+}
+
+// Extract semester type from title (e.g., "Fall 2025" -> "Fall")
+const extractSemesterType = (title: string): SemesterType => {
+  if (title.startsWith('Fall')) return 'Fall'
+  if (title.startsWith('Summer')) return 'Summer'
+  if (title.startsWith('Spring')) return 'Spring'
+  return null
+}
+
 // ============================================================================
 // TYPES & INTERFACES
 // ============================================================================
 
+type SemesterType = 'Fall' | 'Summer' | 'Spring' | null
+
+interface UserContext {
+  id: string
+  role: string
+  full_name: string
+  department_id: string | null
+  batch_id: string | null
+  section_id: string | null
+  department?: { id: string; name: string; short_name: string } | null
+  batch?: { id: string; batch_name: string; batch_number: number } | null
+  section?: { id: string; name: string } | null
+  is_approved: boolean
+}
+
 interface SemesterData {
   id?: string
+  selectedSemester?: SemesterType
   title: string
   description: string
   section: string
@@ -1055,6 +1088,12 @@ function EditPageContent() {
   const [itemToDelete, setItemToDelete] = useState<{ type: 'course' | 'topic' | 'tool', index: number, parentIndex?: number } | null>(null)
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [userContext, setUserContext] = useState<UserContext | null>(null)
+  const [isLoadingUser, setIsLoadingUser] = useState(true)
+
+  // Check if user is a contributor
+  const isContributor = userContext?.role === "contributor"
+  const isAdmin = ["super_admin", "admin", "moderator", "content_creator", "section_admin"].includes(userContext?.role || "")
 
   // Memoized sensors for drag and drop
   const sensors = useSensors(
@@ -1117,6 +1156,42 @@ function EditPageContent() {
     return () => clearTimeout(autoSaveTimer)
   }, [formData, hasUnsavedChanges, autoSaveEnabled, isLoading, isUpdating, semesterId])
 
+  // Fetch user profile on mount
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const response = await fetch("/api/user/profile", {
+          credentials: "include",
+        })
+        const data = await response.json()
+        if (data.success && data.user) {
+          const userData = {
+            ...data.user,
+            department: data.user.departments,
+            batch: data.user.batches,
+            section: data.user.sections,
+          }
+          setUserContext(userData)
+        }
+      } catch (error) {
+        console.error("Error fetching user profile:", error)
+      } finally {
+        setIsLoadingUser(false)
+      }
+    }
+    fetchUserProfile()
+  }, [])
+
+  // Auto-fill section for contributors when user context is loaded
+  useEffect(() => {
+    if (userContext?.role === "contributor" && userContext?.section?.name && !formData.semester.section) {
+      setFormData(prev => ({
+        ...prev,
+        semester: { ...prev.semester, section: userContext.section.name }
+      }))
+    }
+  }, [userContext, formData.semester.section])
+
   // Load semester data on mount
   useEffect(() => {
     if (semesterId) {
@@ -1145,6 +1220,11 @@ function EditPageContent() {
           topics: course.topics || [],
           studyTools: course.studyTools || []
         }))
+      }
+      
+      // Extract semester type from title
+      if (data.semester) {
+        data.semester.selectedSemester = extractSemesterType(data.semester.title)
       }
       
       setFormData(data)
@@ -1350,6 +1430,10 @@ function EditPageContent() {
   }, [startTransitionUpdate])
 
   const validateForm = useCallback((): boolean => {
+    if (!formData.semester.selectedSemester) {
+      toast.error("Please select a semester (Fall, Summer, or Spring)", { icon: <AlertCircle className="h-4 w-4 text-red-500" /> })
+      return false
+    }
     if (!formData.semester.title.trim()) { 
       toast.error("Semester title is required", { icon: <AlertCircle className="h-4 w-4 text-red-500" /> })
       return false 
@@ -1496,21 +1580,52 @@ function EditPageContent() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>
-                      <FileText className="h-4 w-4 inline mr-2" />
-                      Semester Title <span className="text-destructive">*</span>
-                    </Label>
-                    <Input
-                      placeholder="e.g., Fall 2025"
-                      value={formData.semester.title}
-                      onChange={(e) => setFormData(prev => ({
-                        ...prev,
-                        semester: { ...prev.semester, title: e.target.value }
-                      }))}
-                    />
+                {/* Semester Selection with Checkboxes */}
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium flex items-center gap-2">
+                    <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                    Select Semester <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="flex flex-wrap gap-4">
+                    {(['Fall', 'Summer', 'Spring'] as const).map((semester) => (
+                      <div key={semester} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`semester-${semester}`}
+                          checked={formData.semester.selectedSemester === semester}
+                          onCheckedChange={(checked) => {
+                            const newSemester = checked ? semester : null
+                            const generatedTitle = generateSemesterTitle(newSemester)
+                            setFormData(prev => ({
+                              ...prev,
+                              semester: { 
+                                ...prev.semester, 
+                                selectedSemester: newSemester,
+                                title: generatedTitle
+                              }
+                            }))
+                          }}
+                          className="h-4 w-4"
+                        />
+                        <label
+                          htmlFor={`semester-${semester}`}
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                        >
+                          {semester}
+                        </label>
+                      </div>
+                    ))}
                   </div>
+                  {formData.semester.selectedSemester && (
+                    <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-lg">
+                      <p className="text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2">
+                        <Info className="h-4 w-4" />
+                        <span>Will be saved as: <strong>{formData.semester.title}</strong></span>
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
                   <div className="space-y-2">
                     <Label>
                       <Users className="h-4 w-4 inline mr-2" />
@@ -1523,7 +1638,15 @@ function EditPageContent() {
                         ...prev,
                         semester: { ...prev.semester, section: e.target.value }
                       }))}
+                      readOnly={isContributor && userContext?.section?.name}
+                      disabled={isContributor && userContext?.section?.name}
                     />
+                    {isContributor && userContext?.section?.name && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Info className="h-3 w-3" />
+                        Auto-filled from your profile
+                      </p>
+                    )}
                   </div>
                 </div>
 
