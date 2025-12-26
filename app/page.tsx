@@ -51,7 +51,9 @@ export default function HomePage() {
   // Redirect to login if not authenticated (wait for auth to complete)
   useEffect(() => {
     if (!authLoading && !user) {
-      console.log("📍 No user found after auth check, redirecting to login")
+      if (process.env.NODE_ENV === 'development') {
+        console.log("📍 No user found after auth check, redirecting to login")
+      }
       router.push("/login")
     }
   }, [user, authLoading, router])

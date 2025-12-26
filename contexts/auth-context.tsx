@@ -198,7 +198,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
-    console.log("🚀 AuthContext mounted, checking auth...")
+    if (process.env.NODE_ENV === 'development') {
+      console.log("🚀 AuthContext mounted, checking auth...")
+    }
     checkAuth()
   }, [])
 

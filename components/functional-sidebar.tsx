@@ -170,8 +170,13 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
   const touchStartRef = useRef<number | null>(null)
   const isScrollingRef = useRef(false)
 
-  // Fetch semesters on component mount
+  // Fetch semesters on component mount and clear cache
   useEffect(() => {
+    // Clear cache on mount to ensure fresh data for new auth context
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const cacheKeys = Object.keys(localStorage).filter(key => key.startsWith('cache_'))
+      cacheKeys.forEach(key => localStorage.removeItem(key))
+    }
     fetchSemesters()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

@@ -106,7 +106,7 @@ export async function GET(request: NextRequest) {
       canEdit: user ? (isAdmin(user) || canManageContent(user, course.department_id, course.batch_id)) : false,
     }))
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       courses: coursesWithPermissions,
       // Include user context for UI
@@ -116,6 +116,10 @@ export async function GET(request: NextRequest) {
         batch_id: user.batch_id,
       } : null,
     })
+    
+    // Set cache headers to prevent stale data
+    response.headers.set('Cache-Control', 'no-store, must-revalidate')
+    return response
   } catch (error) {
     console.error("Error in courses API:", error)
     return NextResponse.json(

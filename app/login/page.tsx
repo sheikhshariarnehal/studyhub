@@ -117,20 +117,26 @@ export default function LoginPage() {
     e.preventDefault()
     setError("")
 
-    console.log("📝 Form submitted with:", {
-      studentEmail,
-      selectedDepartment,
-      selectedBatch,
-      studentName
-    })
+    if (process.env.NODE_ENV === 'development') {
+      console.log("📝 Form submitted with:", {
+        studentEmail,
+        selectedDepartment,
+        selectedBatch,
+        studentName
+      })
+    }
 
     if (!studentEmail || !selectedDepartment || !selectedBatch) {
-      console.error("❌ Validation failed - missing required fields")
+      if (process.env.NODE_ENV === 'development') {
+        console.error("❌ Validation failed - missing required fields")
+      }
       setError("Please fill in all required fields")
       return
     }
 
-    console.log("✅ Validation passed, starting login...")
+    if (process.env.NODE_ENV === 'development') {
+      console.log("✅ Validation passed, starting login...")
+    }
     
     startTransition(async () => {
       try {

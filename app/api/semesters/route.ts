@@ -43,13 +43,14 @@ export async function GET(request: NextRequest) {
     if (user && (isContributor(user) || user.role === 'student')) {
       console.log("🔍 [Semesters API] Filtering semesters for student/contributor")
       
-      // Get semester IDs that have courses for this user
+      // Get semester IDs that have courses for this user (distinct for efficiency)
       const coursesQuery = supabase
         .from("courses")
         .select("semester_id")
         .eq("department_id", user.department_id)
         .eq("batch_id", user.batch_id)
         .not("semester_id", "is", null)
+        .limit(1000)
 
       const { data: courses, error: coursesError } = await coursesQuery
 

@@ -118,11 +118,9 @@ export async function GET(request: NextRequest) {
           batch: batch || null
         }
       })
-
-      response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
-      response.headers.set('Pragma', 'no-cache')
-      response.headers.set('Expires', '0')
-
+      
+      // Prevent caching of auth data
+      response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
       return response
     }
 

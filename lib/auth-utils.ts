@@ -57,18 +57,27 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser | null
         return null
       }
 
-      // Fetch department and batch separately
-      const { data: department } = await supabase
-        .from("departments")
-        .select("id, name, short_name")
-        .eq("id", student.department_id)
-        .single()
-
-      const { data: batch } = await supabase
-        .from("batches")
-        .select("id, batch_name, batch_number")
-        .eq("id", student.batch_id)
-        .single()
+      // Fetch department and batch separately (only if IDs exist)
+      let department = null
+      let batch = null
+      
+      if (student.department_id) {
+        const { data: dept } = await supabase
+          .from("departments")
+          .select("id, name, short_name")
+          .eq("id", student.department_id)
+          .single()
+        department = dept
+      }
+      
+      if (student.batch_id) {
+        const { data: btch } = await supabase
+          .from("batches")
+          .select("id, batch_name, batch_number")
+          .eq("id", student.batch_id)
+          .single()
+        batch = btch
+      }
 
       console.log("[getAuthUser] Student found:", student.email, "Department:", department?.short_name, "Batch:", batch?.batch_number)
       return {
