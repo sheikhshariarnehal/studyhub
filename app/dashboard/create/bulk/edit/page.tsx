@@ -1412,70 +1412,70 @@ function EditPageContent() {
       <div className="space-y-6 p-6">
           
           {/* Enhanced Header with Auto-save & Status */}
-          <div className="relative">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b mb-6">
+            <div className="flex items-center gap-4">
               <Button 
                 variant="ghost" 
                 size="icon" 
                 asChild
+                className="rounded-full hover:bg-accent"
               >
                 <Link href="/dashboard/create/bulk">
-                  <ArrowLeft className="h-4 w-4" />
+                  <ArrowLeft className="h-5 w-5" />
                 </Link>
               </Button>
               
-              <div className="flex-1">
+              <div>
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-orange-500 to-purple-600">
-                    <Pencil className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h1 className="text-2xl font-bold">
-                        Edit Semester
-                      </h1>
-                      {hasUnsavedChanges && (
-                        <Badge variant="outline" className="text-orange-600">
-                          Unsaved
-                        </Badge>
-                      )}
-                      {isSaving && (
-                        <Badge variant="outline">
-                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                          Saving...
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {formData.semester.title || "Update semester details, courses & materials"}
-                    </p>
+                  <h1 className="text-2xl font-bold tracking-tight">
+                    Edit Semester
+                  </h1>
+                  <div className="flex items-center gap-2">
+                    {hasUnsavedChanges && (
+                      <Badge variant="secondary" className="bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50">
+                        Unsaved
+                      </Badge>
+                    )}
+                    {isSaving && (
+                      <Badge variant="secondary" className="bg-blue-50 text-blue-700 border-blue-200">
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        Saving...
+                      </Badge>
+                    )}
                   </div>
                 </div>
+                <p className="text-sm text-muted-foreground">
+                  {formData.semester.title || "Update semester details, courses & materials"}
+                </p>
               </div>
+            </div>
 
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={autoSaveEnabled}
-                    onCheckedChange={setAutoSaveEnabled}
-                  />
-                  <span className="text-sm">Auto-save</span>
-                </div>
-                
-                <Button
-                  onClick={loadSemesterData}
-                  variant="outline"
-                  size="sm"
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Reload
-                </Button>
-                
-                <div className="hidden md:flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <Keyboard className="h-4 w-4" />
-                  <kbd className="px-2 py-1 text-xs border rounded">Ctrl</kbd>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-lg border">
+                <Switch
+                  checked={autoSaveEnabled}
+                  onCheckedChange={setAutoSaveEnabled}
+                  id="auto-save"
+                />
+                <Label htmlFor="auto-save" className="text-xs font-medium cursor-pointer">Auto-save</Label>
+              </div>
+              
+              <Button
+                onClick={loadSemesterData}
+                variant="outline"
+                size="sm"
+                className="h-9"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Reload
+              </Button>
+              
+              <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-lg text-xs text-muted-foreground border">
+                <Keyboard className="h-3.5 w-3.5" />
+                <div className="flex items-center gap-1">
+                  <kbd className="px-1.5 py-0.5 bg-background border rounded shadow-sm">Ctrl</kbd>
                   <span>+</span>
-                  <kbd className="px-2 py-1 text-xs border rounded">S</kbd>
+                  <kbd className="px-1.5 py-0.5 bg-background border rounded shadow-sm">S</kbd>
                 </div>
               </div>
             </div>
