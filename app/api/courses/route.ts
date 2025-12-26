@@ -15,6 +15,8 @@ import { getAuthUser, isContributor, isAdmin, isStudent, getContentFilterForUser
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthUser(request)
+    console.log("📊 [Courses API] User:", user ? `${user.email} (${user.role})` : "Not authenticated")
+    
     const { searchParams } = new URL(request.url)
     const semesterId = searchParams.get("semester_id")
     const search = searchParams.get("search")
@@ -39,36 +41,34 @@ export async function GET(request: NextRequest) {
         created_at,
         created_by,
         department_id,
-        batch_id,
-        semester:semesters (
-          id,
-          title,
-          section
-        ),
-        departments:department_id (id, name, short_name),
-        batches:batch_id (id, batch_name, batch_number)
+        batch_id
       `)
       .order("course_code", { ascending: true })
 
     // Apply department/batch filtering for students and contributors
     if (user && (isStudent(user) || isContributor(user))) {
       const contentFilter = getContentFilterForUser(user, viewDepartmentId, viewBatchId)
+      console.log("🔍 [Courses API] Applying filter:", contentFilter)
       
       // Filter by department if specified
       if (contentFilter.department_id) {
+        console.log("📍 [Courses API] Filtering by department:", contentFilter.department_id)
         query = query.eq('department_id', contentFilter.department_id)
       }
       
       // Filter by batch if specified
       if (contentFilter.batch_id) {
+        console.log("📍 [Courses API] Filtering by batch:", contentFilter.batch_id)
         query = query.eq('batch_id', contentFilter.batch_id)
       }
       
       // Exclude content without department/batch for students and contributors
       if (contentFilter.excludeNullDeptBatch) {
+        console.log("📍 [Courses API] Excluding null dept/batch")
         query = query.not('department_id', 'is', null).not('batch_id', 'is', null)
       }
     } else {
+      console.log("ℹ️ [Courses API] No filtering applied (admin or no user)")
       // For admins, allow optional filtering but don't require it
       if (viewDepartmentId) {
         query = query.eq('department_id', viewDepartmentId)
@@ -91,13 +91,15 @@ export async function GET(request: NextRequest) {
     const { data: courses, error } = await query
 
     if (error) {
-      console.error("Error fetching courses:", error)
+      console.error("❌ [Courses API] Error fetching courses:", error)
       return NextResponse.json(
         { success: false, error: "Failed to fetch courses" },
         { status: 500 }
       )
     }
 
+    console.log(`✅ [Courses API] Found ${courses?.length || 0} courses`)
+    
     // Add canEdit flag for each course
     const coursesWithPermissions = (courses || []).map(course => ({
       ...course,

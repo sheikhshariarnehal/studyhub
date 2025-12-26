@@ -47,9 +47,7 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser | null
           email, 
           full_name,
           department_id,
-          batch_id,
-          departments:department_id (id, name, short_name),
-          batches:batch_id (id, batch_name, batch_number)
+          batch_id
         `)
         .eq("id", decoded.userId)
         .single()
@@ -59,7 +57,20 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser | null
         return null
       }
 
-      console.log("[getAuthUser] Student found:", student.email)
+      // Fetch department and batch separately
+      const { data: department } = await supabase
+        .from("departments")
+        .select("id, name, short_name")
+        .eq("id", student.department_id)
+        .single()
+
+      const { data: batch } = await supabase
+        .from("batches")
+        .select("id, batch_name, batch_number")
+        .eq("id", student.batch_id)
+        .single()
+
+      console.log("[getAuthUser] Student found:", student.email, "Department:", department?.short_name, "Batch:", batch?.batch_number)
       return {
         id: student.id,
         email: student.email,
@@ -68,8 +79,8 @@ export async function getAuthUser(request: NextRequest): Promise<AuthUser | null
         is_approved: true, // Students are auto-approved
         department_id: student.department_id,
         batch_id: student.batch_id,
-        department: student.departments as AuthUser['department'],
-        batch: student.batches as AuthUser['batch'],
+        department: department || null,
+        batch: batch || null,
       }
     }
 

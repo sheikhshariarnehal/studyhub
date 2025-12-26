@@ -29,6 +29,8 @@ export async function GET(request: NextRequest) {
   return withErrorHandler(async () => {
     const supabase = getSupabaseClient()
     const user = await getAuthUser(request)
+    console.log("📊 [Semesters API] User:", user ? `${user.email} (${user.role})` : "Not authenticated")
+    
     const { searchParams } = new URL(request.url)
     const params = parseQueryParams(searchParams)
     const includeCourses = searchParams.get('include') === 'courses'
@@ -36,6 +38,76 @@ export async function GET(request: NextRequest) {
     // Get viewing context from query params
     const viewDepartmentId = searchParams.get('department_id') || undefined
     const viewBatchId = searchParams.get('batch_id') || undefined
+
+    // For students and contributors, filter to only show semesters with courses in their dept/batch
+    if (user && (isContributor(user) || user.role === 'student')) {
+      console.log("🔍 [Semesters API] Filtering semesters for student/contributor")
+      
+      // Get semester IDs that have courses for this user
+      const coursesQuery = supabase
+        .from("courses")
+        .select("semester_id")
+        .eq("department_id", user.department_id)
+        .eq("batch_id", user.batch_id)
+        .not("semester_id", "is", null)
+
+      const { data: courses, error: coursesError } = await coursesQuery
+
+      if (coursesError) {
+        console.error("❌ [Semesters API] Error fetching courses:", coursesError)
+        return errorResponse("Failed to fetch courses", 500)
+      }
+
+      const semesterIds = [...new Set(courses?.map(c => c.semester_id).filter(Boolean))]
+      console.log(`📍 [Semesters API] Found ${semesterIds.length} semesters with courses`)
+
+      if (semesterIds.length === 0) {
+        console.log("ℹ️ [Semesters API] No semesters with courses for this user")
+        return successResponse([], undefined, {
+          total: 0,
+          page: 1,
+          limit: params.limit,
+          hasMore: false,
+        })
+      }
+
+      // Fetch only those semesters
+      let query = supabase
+        .from("semesters")
+        .select("*", { count: 'exact' })
+        .in("id", semesterIds)
+
+      // Apply filters
+      if (params.isActive !== undefined) {
+        query = query.eq('is_active', params.isActive)
+      }
+
+      if (params.search) {
+        query = query.or(`title.ilike.%${params.search}%,section.ilike.%${params.search}%`)
+      }
+
+      // Apply sorting
+      query = query
+        .order('is_active', { ascending: false })
+        .order(params.sortBy || 'created_at', { ascending: params.sortOrder === 'asc' })
+        .range((params.page! - 1) * params.limit!, params.page! * params.limit! - 1)
+
+      const { data, error, count } = await query
+
+      if (error) {
+        console.error("❌ [Semesters API] Error:", error)
+        return errorResponse(error.message, 500)
+      }
+
+      console.log(`✅ [Semesters API] Returning ${data?.length || 0} semesters`)
+      
+      return successResponse(data || [], undefined, {
+        total: count || 0,
+        page: params.page,
+        limit: params.limit,
+        hasMore: count ? (params.page! * params.limit!) < count : false,
+      })
+    }
 
     // Build query with optional course inclusion and department/batch info
     let query = supabase

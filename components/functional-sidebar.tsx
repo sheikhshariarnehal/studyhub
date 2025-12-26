@@ -310,9 +310,26 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
       setError(null)
 
       const data = await getCachedData("semesters", async () => {
-        const { data, error } = await supabase.from("semesters").select("*").order("created_at", { ascending: false })
-        if (error) throw error
-        return data || []
+        // Use API endpoint instead of direct Supabase to get filtered semesters
+        // For students, this will only return semesters that have courses for their dept/batch
+        const response = await fetch('/api/semesters', {
+          credentials: 'include'
+        })
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch semesters')
+        }
+        
+        const result = await response.json()
+        
+        // The API returns different structure, extract semesters
+        if (result.success && result.data) {
+          return result.data
+        } else if (result.semesters) {
+          return result.semesters
+        }
+        
+        return result.data || []
       })
 
       setSemesters(data)
@@ -689,6 +706,20 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
 
   return (
     <div className={`h-full flex flex-col bg-background ${isMobile ? 'mobile-scroll-container' : ''}`}>
+      {/* No Semesters Available - Show helpful message */}
+      {semesters.length === 0 ? (
+        <div className="h-full flex flex-col items-center justify-center p-8 text-center">
+          <GraduationCap className="h-16 w-16 text-muted-foreground/50 mb-4" />
+          <h3 className="text-lg font-semibold text-foreground mb-2">No Content Available</h3>
+          <p className="text-sm text-muted-foreground max-w-sm">
+            There are currently no courses available for your selected department and batch.
+          </p>
+          <p className="text-xs text-muted-foreground/70 mt-4">
+            Please contact your administrator if you believe this is an error.
+          </p>
+        </div>
+      ) : (
+        <>
       {/* Header - Simplified for Mobile */}
       <div className={`${isMobile ? 'px-4 py-3 bg-background border-b border-border/30' : 'p-4 border-b border-border'}`}>
         {/* Mobile: Simple header without title */}
@@ -874,6 +905,8 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
           )}
         </div>
       </ScrollArea>
+      </>
+      )}
     </div>
   )
 }
