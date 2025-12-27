@@ -1,89 +1,109 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, memo, useCallback, useMemo } from "react"
 import { useRouter, usePathname } from "next/navigation"
-import { Bell, Sun, User, Moon, Menu, X, LogOut, Settings, ChevronDown, BookOpen, GraduationCap, FolderOpen, LogIn } from "lucide-react"
+import { Sun, User, Moon, Menu, X, LogOut, Settings, ChevronDown, BookOpen, GraduationCap, FolderOpen, LogIn, Users, Award } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
 
+// ============================================================================
+// PERFORMANCE OPTIMIZATIONS
+// ============================================================================
+
+// Memoized navigation items to prevent recreation on every render
+const NAVIGATION_ITEMS = [
+  { name: "Study", href: "/", icon: BookOpen, primary: true },
+  { name: "Resources", href: "/Resources", icon: FolderOpen, primary: false },
+  { name: "Notes", href: "/notes", icon: GraduationCap, primary: false },
+  { name: "Contributor", href: "/contributor", icon: Users, primary: false },
+  { name: "Result", href: "/result", icon: Award, primary: false },
+] as const
+
+// Preload profile images for faster rendering
+const preloadProfileAssets = () => {
+  if (typeof window === 'undefined') return
+  // Preload common SVG icons that might be used
+  const icons = [LogOut, Settings, User]
+  // Icons are already loaded, no need to fetch
+}
+
 interface HeaderProps {
   className?: string
 }
 
-export function Header({ className }: HeaderProps) {
+const HeaderComponent = function Header({ className }: HeaderProps) {
   const [mounted, setMounted] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
-  const [isNotificationOpen, setIsNotificationOpen] = useState(false)
   const { theme, setTheme } = useTheme()
   const { user, loading, logout } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const profileRef = useRef<HTMLDivElement>(null)
-  const notificationRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setMounted(true)
+    preloadProfileAssets()
   }, [])
 
-  // Close dropdowns when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
-        setIsProfileOpen(false)
-      }
-      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
-        setIsNotificationOpen(false)
-      }
+  // Close dropdowns when clicking outside - optimized with useCallback
+  const handleClickOutside = useCallback((event: MouseEvent) => {
+    if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+      setIsProfileOpen(false)
     }
-
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  const toggleTheme = () => {
+  useEffect(() => {
+    if (isProfileOpen) {
+      document.addEventListener("mousedown", handleClickOutside)
+      return () => document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [isProfileOpen, handleClickOutside])
+
+  const toggleTheme = useCallback(() => {
     setTheme(theme === "dark" ? "light" : "dark")
-  }
+  }, [theme, setTheme])
 
-  const navigationItems = [
-    { name: "Study", href: "/", icon: BookOpen, primary: true },
-    { name: "Resources", href: "/Resources", icon: FolderOpen, primary: false },
-    { name: "Notes", href: "/notes", icon: GraduationCap, primary: false },
-    { name: "Contributor", href: "/contributor", primary: false },
-    { name: "Result", href: "/result", primary: false },
-  ]
-
-  const handleNavigation = (href: string) => {
+  const handleNavigation = useCallback((href: string) => {
     router.push(href)
     setIsMobileMenuOpen(false)
-  }
+  }, [router])
 
-  // Mock notifications - replace with real data
-  const notifications = [
-    { id: 1, title: "New course available", message: "Data Structures course is now live", time: "2 hours ago", unread: true },
-    { id: 2, title: "Assignment reminder", message: "Due date approaching for AI project", time: "5 hours ago", unread: true },
-    { id: 3, title: "Grade posted", message: "Your exam grade has been posted", time: "1 day ago", unread: false },
-  ]
-
-  const unreadCount = notifications.filter(n => n.unread).length
-
-  const handleLogout = async () => {
-    await logout()
+  const handleLogout = useCallback(async () => {
     setIsProfileOpen(false)
+    await logout()
     router.push("/")
-  }
+  }, [logout, router])
+
+  // Memoize computed values to prevent recalculation
+  const userDisplayName = useMemo(() => {
+    return user?.full_name?.split(' ')[0] || 'User'
+  }, [user?.full_name])
+
+  const userDepartmentInfo = useMemo(() => {
+    if (user?.role !== "student" || !user.department || !user.batch) return null
+    return {
+      department: user.department.short_name || user.department.name,
+      batch: user.batch.batch_name
+    }
+  }, [user?.role, user?.department, user?.batch])
+
+  const containerClasses = useMemo(() => 
+    cn(
+      "border-b border-border/30 sticky top-0 z-50 backdrop-blur-xl bg-background/95 shadow-sm",
+      className
+    ),
+    [className]
+  )
 
   if (!mounted) {
     return null
   }
 
   return (
-    <header className={cn(
-      "border-b border-border/30 sticky top-0 z-50 backdrop-blur-xl bg-background/95 shadow-sm",
-      className
-    )}>
+    <header className={containerClasses}>
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between gap-4">
           {/* Left Section - Logo */}
@@ -126,7 +146,7 @@ export function Header({ className }: HeaderProps) {
 
           {/* Center Section - Navigation (Hidden on mobile) */}
           <nav className="hidden lg:flex items-center gap-2 flex-1 justify-center">
-            {navigationItems.map((item) => {
+            {NAVIGATION_ITEMS.map((item) => {
               const isActive = pathname === item.href
               const Icon = item.icon
               return (
@@ -134,7 +154,7 @@ export function Header({ className }: HeaderProps) {
                   key={item.name}
                   variant="ghost"
                   className={cn(
-                    "text-sm font-medium px-5 h-10 rounded-xl transition-all duration-200",
+                    "text-sm font-medium px-5 h-10 rounded-xl transition-all duration-150",
                     isActive 
                       ? "bg-primary/10 text-primary hover:bg-primary/15 font-semibold shadow-sm" 
                       : "hover:bg-accent/60 text-foreground/80 hover:text-foreground"
@@ -181,7 +201,7 @@ export function Header({ className }: HeaderProps) {
                       <User className="h-4 w-4 text-primary" />
                     </div>
                     <span className="hidden md:block text-sm font-medium max-w-[100px] truncate">
-                      {user.full_name?.split(' ')[0] || 'User'}
+                      {userDisplayName}
                     </span>
                     <ChevronDown className={cn(
                       "h-3.5 w-3.5 text-muted-foreground transition-transform duration-200",
@@ -198,13 +218,13 @@ export function Header({ className }: HeaderProps) {
                         <span className="inline-block mt-2 px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary rounded-full capitalize">
                           {user.role?.replace('_', ' ') || 'User'}
                         </span>
-                        {user.role === "student" && user.department && user.batch && (
+                        {userDepartmentInfo && (
                           <div className="mt-2 pt-2 border-t border-border/30 space-y-1">
                             <p className="text-[10px] text-muted-foreground">
-                              <span className="font-medium">Department:</span> {user.department.short_name || user.department.name}
+                              <span className="font-medium">Department:</span> {userDepartmentInfo.department}
                             </p>
                             <p className="text-[10px] text-muted-foreground">
-                              <span className="font-medium">Batch:</span> {user.batch.batch_name}
+                              <span className="font-medium">Batch:</span> {userDepartmentInfo.batch}
                             </p>
                           </div>
                         )}
@@ -309,10 +329,10 @@ export function Header({ className }: HeaderProps) {
 
       {/* Mobile Navigation Menu */}
       {isMobileMenuOpen && (
-        <div className="lg:hidden border-t border-border/30 bg-background/98 backdrop-blur-xl animate-in slide-in-from-top duration-200 shadow-lg">
+        <div className="lg:hidden border-t border-border/30 bg-background/98 backdrop-blur-xl animate-in slide-in-from-top duration-150 shadow-lg">
           <div className="container mx-auto px-4 py-5">
             <nav className="flex flex-col gap-2">
-              {navigationItems.map((item) => {
+              {NAVIGATION_ITEMS.map((item) => {
                 const isActive = pathname === item.href
                 const Icon = item.icon
                 return (
@@ -320,19 +340,21 @@ export function Header({ className }: HeaderProps) {
                     key={item.name}
                     variant="ghost"
                     className={cn(
-                      "justify-start text-sm font-medium px-5 py-3.5 rounded-xl transition-all duration-200",
+                      "justify-start text-sm font-medium px-5 py-3.5 rounded-xl transition-all duration-150",
                       isActive 
                         ? "bg-primary/10 text-primary hover:bg-primary/15 font-semibold shadow-sm" 
                         : "hover:bg-accent/60 text-foreground/80"
                     )}
                     onClick={() => handleNavigation(item.href)}
                   >
-                    <div className={cn(
-                      "w-9 h-9 rounded-lg flex items-center justify-center mr-3",
-                      isActive ? "bg-primary/15" : "bg-accent/30"
-                    )}>
-                      {Icon && <Icon className="h-4 w-4" />}
-                    </div>
+                    {Icon && (
+                      <div className={cn(
+                        "w-9 h-9 rounded-lg flex items-center justify-center mr-3",
+                        isActive ? "bg-primary/15" : "bg-accent/30"
+                      )}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                    )}
                     {item.name}
                   </Button>
                 )
@@ -344,3 +366,7 @@ export function Header({ className }: HeaderProps) {
     </header>
   )
 }
+
+// Export memoized component for better performance
+export const Header = memo(HeaderComponent)
+Header.displayName = "Header"

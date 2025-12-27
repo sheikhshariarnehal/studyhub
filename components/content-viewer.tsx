@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback, memo, useMemo, startTr
 import {
   Loader2, AlertCircle, FileText, Play, BookOpen, ExternalLink, Maximize2, RotateCcw,
   ZoomIn, ZoomOut, RotateCw, Volume2, VolumeX, Settings, Share2, Bookmark,
-  PictureInPicture, Download, RefreshCw, Eye, EyeOff, Clock, Pause
+  PictureInPicture, Download, RefreshCw, Eye, EyeOff, Clock, Pause, MoreVertical
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -178,6 +178,7 @@ const ContentViewerComponent = function ContentViewer({ content, isLoading = fal
   const [showControls, setShowControls] = useState(true)
   const [isRotated, setIsRotated] = useState(0)
   const [isPictureInPicture, setIsPictureInPicture] = useState(false)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -624,60 +625,58 @@ const ContentViewerComponent = function ContentViewer({ content, isLoading = fal
       ${isFullscreen ? 'fixed inset-0 z-50 rounded-none' : ''}
       ${isMobile ? 'mobile-content-viewer' : ''}
     `}>
-      {/* Content Header - Hidden for syllabus */}
+      {/* Content Header - Optimized for Mobile */}
       {content.type !== "syllabus" && (
         <div className={`
           absolute top-0 left-0 right-0 z-20
-          bg-gradient-to-b from-black/0 via-black/0 to-transparent
-          hover:from-black/80 hover:via-black/60 hover:to-transparent
-          dark:hover:from-gray-900/90 dark:hover:via-gray-900/70 dark:hover:to-transparent
           transition-all duration-300 ease-in-out
-          ${isMobile ? 'p-2 sm:p-3' : 'p-3 sm:p-4 lg:p-5'}
+          ${isMobile 
+            ? 'bg-gradient-to-b from-black/90 via-black/70 to-transparent p-2' 
+            : 'bg-gradient-to-b from-black/0 via-black/0 to-transparent hover:from-black/80 hover:via-black/60 hover:to-transparent dark:hover:from-gray-900/90 dark:hover:via-gray-900/70 dark:hover:to-transparent p-3 sm:p-4 lg:p-5'
+          }
           ${isFullscreen && isMobile ? 'pt-safe-top' : ''}
-          group
+          ${!isMobile ? 'group' : ''}
         `}>
-        <div className="flex items-start justify-between text-white opacity-0 group-hover:opacity-100
-          transition-opacity duration-300 ease-in-out gap-2 sm:gap-3">
-          <div className="flex items-start gap-2 sm:gap-3 min-w-0 flex-1">
+        <div className={`flex items-start justify-between text-white gap-2 transition-opacity duration-300 ease-in-out ${
+          isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+        }`}>
+          <div className="flex items-start gap-2 min-w-0 flex-1">
             {getContentIcon()}
             <div className="min-w-0 flex-1">
               <h3 className={`
-                font-semibold leading-tight line-clamp-2 mb-1
-                ${isMobile ? 'text-xs sm:text-sm' : 'text-sm sm:text-base lg:text-lg'}
+                font-semibold leading-tight line-clamp-1 sm:line-clamp-2
+                ${isMobile ? 'text-xs' : 'text-sm sm:text-base lg:text-lg'}
               `}>
                 {content.title}
               </h3>
-              {content.topicTitle && (
-                <p className={`
-                  opacity-80 truncate mb-0.5
-                  ${isMobile ? 'text-xs' : 'text-xs sm:text-sm'}
-                `}>
+              {!isMobile && content.topicTitle && (
+                <p className="opacity-80 truncate text-xs sm:text-sm mt-0.5">
                   {content.topicTitle}
                 </p>
               )}
-              {content.courseTitle && (
+              {!isMobile && content.courseTitle && (
                 <p className="text-xs opacity-70 truncate">{content.courseTitle}</p>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-
-
-            <Badge
-              variant="secondary"
-              className={`
-                font-medium
-                ${isMobile ? 'text-xs px-1.5 py-0.5' : 'text-xs px-2 py-1'}
-                ${content.type === "video"
-                  ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
-                  : content.type === "slide"
-                    ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-                    : "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
-                }
-              `}
-            >
-              {isMobile ? content.type.charAt(0).toUpperCase() : content.type}
-            </Badge>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {/* Badge - Desktop only */}
+            {!isMobile && (
+              <Badge
+                variant="secondary"
+                className={`
+                  font-medium text-xs px-2 py-1
+                  ${content.type === "video"
+                    ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
+                    : content.type === "slide"
+                      ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                      : "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                  }
+                `}
+              >
+                {content.type}
+              </Badge>
+            )}
 
             {/* Desktop Controls */}
             {!isMobile && showControls && (
@@ -777,41 +776,148 @@ const ContentViewerComponent = function ContentViewer({ content, isLoading = fal
               </div>
             )}
 
-            {/* Mobile Controls - Essential controls only */}
+            {/* Mobile Controls - Compact with dropdown menu */}
             {isMobile && (
-              <div className="flex items-center gap-1">
-                {/* Bookmark - Essential for mobile */}
+              <div className="flex items-center gap-1.5">
+                {/* Quick Actions */}
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={handleBookmark}
-                  className="text-white hover:bg-white/20 p-1.5 h-auto touch-manipulation"
+                  className="text-white hover:bg-white/20 p-2 h-8 w-8 rounded-lg touch-manipulation backdrop-blur-sm bg-black/20"
                   title={isBookmarked ? "Remove bookmark" : "Add bookmark"}
                 >
-                  <Bookmark className={`h-3 w-3 ${isBookmarked ? 'fill-current' : ''}`} />
+                  <Bookmark className={`h-4 w-4 ${isBookmarked ? 'fill-current' : ''}`} />
                 </Button>
 
-                {/* Fullscreen - Essential for mobile */}
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={toggleFullscreen}
-                  className="text-white hover:bg-white/20 p-1.5 h-auto touch-manipulation"
+                  className="text-white hover:bg-white/20 p-2 h-8 w-8 rounded-lg touch-manipulation backdrop-blur-sm bg-black/20"
                   title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
                 >
-                  <Maximize2 className="h-3 w-3" />
+                  <Maximize2 className="h-4 w-4" />
                 </Button>
+
+                {/* More Options Dropdown */}
+                <div className="relative">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    className="text-white hover:bg-white/20 p-2 h-8 w-8 rounded-lg touch-manipulation backdrop-blur-sm bg-black/20"
+                    title="More options"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+
+                  {/* Dropdown Menu */}
+                  {isMobileMenuOpen && (
+                    <>
+                      {/* Backdrop */}
+                      <div 
+                        className="fixed inset-0 z-30" 
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      />
+                      
+                      {/* Menu */}
+                      <div className="absolute right-0 top-full mt-2 w-48 bg-gray-900/95 backdrop-blur-lg rounded-lg shadow-xl border border-white/10 overflow-hidden z-40 animate-in fade-in slide-in-from-top-2 duration-200">
+                        <div className="py-1">
+                          <button
+                            onClick={() => {
+                              handleShare()
+                              setIsMobileMenuOpen(false)
+                            }}
+                            className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/10 flex items-center gap-3 transition-colors touch-manipulation"
+                          >
+                            <Share2 className="h-4 w-4" />
+                            <span>Share</span>
+                          </button>
+                          
+                          {content.type === 'slide' && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  handleZoomIn()
+                                  setIsMobileMenuOpen(false)
+                                }}
+                                className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/10 flex items-center gap-3 transition-colors touch-manipulation"
+                                disabled={zoomLevel >= 200}
+                              >
+                                <ZoomIn className="h-4 w-4" />
+                                <span>Zoom In</span>
+                              </button>
+                              
+                              <button
+                                onClick={() => {
+                                  handleZoomOut()
+                                  setIsMobileMenuOpen(false)
+                                }}
+                                className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/10 flex items-center gap-3 transition-colors touch-manipulation"
+                                disabled={zoomLevel <= 50}
+                              >
+                                <ZoomOut className="h-4 w-4" />
+                                <span>Zoom Out</span>
+                              </button>
+                              
+                              <button
+                                onClick={() => {
+                                  handleRotate()
+                                  setIsMobileMenuOpen(false)
+                                }}
+                                className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/10 flex items-center gap-3 transition-colors touch-manipulation"
+                              >
+                                <RotateCw className="h-4 w-4" />
+                                <span>Rotate</span>
+                              </button>
+                              
+                              {zoomLevel !== 100 && (
+                                <button
+                                  onClick={() => {
+                                    handleZoomReset()
+                                    setIsMobileMenuOpen(false)
+                                  }}
+                                  className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/10 flex items-center gap-3 transition-colors touch-manipulation"
+                                >
+                                  <RefreshCw className="h-4 w-4" />
+                                  <span>Reset Zoom ({zoomLevel}%)</span>
+                                </button>
+                              )}
+                            </>
+                          )}
+                          
+                          <div className="border-t border-white/10 my-1" />
+                          
+                          <button
+                            onClick={() => {
+                              openInNewTab()
+                              setIsMobileMenuOpen(false)
+                            }}
+                            className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/10 flex items-center gap-3 transition-colors touch-manipulation"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                            <span>Open in New Tab</span>
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={openInNewTab}
-              className="text-white hover:bg-white/20 p-1.5 sm:p-2 h-auto touch-manipulation"
-              title="Open in new tab"
-            >
-              <ExternalLink className="h-3 w-3 sm:h-4 sm:w-4" />
-            </Button>
+            {/* Desktop external link */}
+            {!isMobile && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={openInNewTab}
+                className="text-white hover:bg-white/20 p-2 h-auto touch-manipulation"
+                title="Open in new tab"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
       </div>
