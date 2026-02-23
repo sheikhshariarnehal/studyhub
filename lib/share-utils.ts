@@ -126,6 +126,11 @@ export function generateEmbedUrl(contentType: string, originalUrl: string): stri
       if (fileId) {
         return `https://drive.google.com/file/d/${fileId}/preview`
       }
+      // For direct file URLs (e.g. DigitalOcean Spaces, S3, CDN-hosted PDFs),
+      // use Google Docs Viewer so Chrome does not block the iframe embed.
+      if (originalUrl.startsWith('http://') || originalUrl.startsWith('https://')) {
+        return `https://docs.google.com/viewer?url=${encodeURIComponent(originalUrl)}&embedded=true`
+      }
       return originalUrl
       
     default:

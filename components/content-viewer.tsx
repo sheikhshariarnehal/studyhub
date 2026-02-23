@@ -433,6 +433,12 @@ export const ContentViewer = memo(function ContentViewer({ content, isLoading = 
         // Return Google Drive embed URL for preview
         return `https://drive.google.com/file/d/${fileId}/preview`
       }
+
+      // For direct file URLs (e.g. DigitalOcean Spaces, S3, CDN-hosted PDFs),
+      // use Google Docs Viewer so Chrome does not block the iframe embed.
+      if (url.startsWith("http://") || url.startsWith("https://")) {
+        return `https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true`
+      }
     }
 
     return url
