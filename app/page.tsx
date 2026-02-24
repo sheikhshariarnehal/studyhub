@@ -113,7 +113,8 @@ export default function HomePage() {
           } else if (parsedUrl.type === 'study-tool') {
             apiEndpoint = `/api/study-tools-simple/${parsedUrl.id}`
           } else {
-            apiEndpoint = `/api/${parsedUrl.type === 'study-tool' ? 'study-tools' : `${parsedUrl.type}s`}/${parsedUrl.id}`
+            // syllabus, document, etc. are all study-tool subtypes
+            apiEndpoint = `/api/study-tools-simple/${parsedUrl.id}`
           }
           console.log("API Endpoint:", apiEndpoint)
 

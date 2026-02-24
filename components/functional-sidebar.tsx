@@ -1104,7 +1104,7 @@ const StudyToolsSection = memo<StudyToolsSectionProps>(({
         onClick={handleToggle}
       >
         <div className="flex items-center gap-2">
-          <div className={`transition-transform duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] ${isExpanded ? 'rotate-90' : 'rotate-0'}`}>
+          <div className={`transition-transform duration-200 ease-in-out ${isExpanded ? 'rotate-90' : 'rotate-0'}`}>
             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
           </div>
           <BookOpen className="h-3.5 w-3.5 text-primary" />
@@ -1232,7 +1232,7 @@ const TopicsSection = memo<TopicsSectionProps>(({
         onClick={handleToggle}
       >
         <div className="flex items-center gap-2">
-          <div className={`transition-transform duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] ${isExpanded ? 'rotate-90' : 'rotate-0'}`}>
+          <div className={`transition-transform duration-200 ease-in-out ${isExpanded ? 'rotate-90' : 'rotate-0'}`}>
             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
           </div>
           <FileText className="h-3.5 w-3.5 text-muted-foreground" />
@@ -1315,7 +1315,7 @@ const TopicItem = memo<TopicItemProps>(({
         onClick={handleToggle}
       >
         <div className={`flex items-center gap-2 w-full min-w-0`}>
-          <div className={`transition-transform duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] ${isExpanded ? 'rotate-90' : 'rotate-0'}`}>
+          <div className={`transition-transform duration-200 ease-in-out ${isExpanded ? 'rotate-90' : 'rotate-0'}`}>
             <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 transition-colors duration-200 ${
               isExpanded ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'
             }`} />

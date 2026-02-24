@@ -95,7 +95,7 @@ export function UnifiedFileViewer({
         setLoading(true)
         setError(null)
         
-        const apiEndpoint = `/api/${contentType === 'study-tool' ? 'study-tools' : `${contentType}s`}/${contentId}`
+        const apiEndpoint = `/api/${contentType === 'slide' ? 'slides' : contentType === 'video' ? 'videos' : 'study-tools'}/${contentId}`
         const response = await fetch(apiEndpoint)
         
         if (!response.ok) {

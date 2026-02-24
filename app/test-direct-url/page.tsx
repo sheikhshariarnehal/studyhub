@@ -41,7 +41,7 @@ export default function TestDirectUrlPage() {
         
         if (parsedUrl) {
           // Build API endpoint
-          const apiEndpoint = `/api/${parsedUrl.type === 'study-tool' ? 'study-tools' : `${parsedUrl.type}s`}/${parsedUrl.id}`
+          const apiEndpoint = `/api/${parsedUrl.type === 'slide' ? 'slides' : parsedUrl.type === 'video' ? 'videos' : 'study-tools'}/${parsedUrl.id}`
           addDebug(`API Endpoint: ${apiEndpoint}`)
           
           // Fetch data

@@ -1,8 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import { generateSimpleShareUrl } from "@/lib/simple-share-utils"
+import { BookOpen, Search, Copy, Check, ExternalLink, FolderOpen, X, RefreshCw, AlertCircle } from "lucide-react"
 
 interface StudyTool {
   id: string
@@ -20,136 +25,201 @@ interface StudyTool {
   }
 }
 
+function StudyToolCardSkeleton() {
+  return (
+    <Card className="overflow-hidden">
+      <CardContent className="p-5 space-y-3">
+        <div className="flex items-start gap-3">
+          <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-5 w-3/4" />
+            <Skeleton className="h-4 w-full" />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-6 w-20 rounded-full" />
+          <Skeleton className="h-6 w-24 rounded-full" />
+        </div>
+        <div className="flex gap-2 pt-2">
+          <Skeleton className="h-9 flex-1 rounded-lg" />
+          <Skeleton className="h-9 flex-1 rounded-lg" />
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function BrowseStudyToolsPage() {
   const [studyTools, setStudyTools] = useState<StudyTool[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
-  useEffect(() => {
-    const fetchStudyTools = async () => {
-      try {
-        const response = await fetch('/api/study-tools-list')
-        const data = await response.json()
-        
-        if (response.ok) {
-          setStudyTools(data.studyTools || [])
-        } else {
-          setError(data.error || 'Failed to fetch study tools')
-        }
-      } catch (err) {
-        setError('Network error: ' + err)
-      } finally {
-        setLoading(false)
+  const fetchStudyTools = useCallback(async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await fetch('/api/study-tools-list')
+      const data = await response.json()
+      if (response.ok) {
+        setStudyTools(data.studyTools || [])
+      } else {
+        setError(data.error || 'Failed to fetch study tools')
       }
+    } catch {
+      setError('Network error. Please check your connection and try again.')
+    } finally {
+      setLoading(false)
     }
-    
-    fetchStudyTools()
   }, [])
 
-  const testStudyTool = (studyToolId: string) => {
-    const shareUrl = generateSimpleShareUrl('study-tool', studyToolId)
-    window.open(shareUrl, '_blank')
-  }
+  useEffect(() => { fetchStudyTools() }, [fetchStudyTools])
 
-  const copyShareUrl = async (studyToolId: string) => {
-    const shareUrl = generateSimpleShareUrl('study-tool', studyToolId)
+  const filteredTools = useMemo(() => {
+    if (!searchQuery.trim()) return studyTools
+    const q = searchQuery.toLowerCase()
+    return studyTools.filter(t =>
+      t.title.toLowerCase().includes(q) ||
+      t.description?.toLowerCase().includes(q) ||
+      t.study_tool_type.toLowerCase().includes(q) ||
+      t.topic?.title.toLowerCase().includes(q) ||
+      t.topic?.course?.title.toLowerCase().includes(q)
+    )
+  }, [studyTools, searchQuery])
+
+  const openTool = (id: string) => window.open(generateSimpleShareUrl('study-tool', id), '_blank')
+
+  const copyShareUrl = async (id: string) => {
     try {
-      await navigator.clipboard.writeText(shareUrl)
-      alert('Share URL copied to clipboard!')
-    } catch (err) {
-      alert('Failed to copy URL')
-    }
+      await navigator.clipboard.writeText(generateSimpleShareUrl('study-tool', id))
+      setCopiedId(id)
+      setTimeout(() => setCopiedId(null), 2000)
+    } catch { /* clipboard unavailable */ }
   }
 
-  if (loading) {
-    return (
-      <div className="container mx-auto p-8">
-        <h1 className="text-3xl font-bold mb-6">Browse Available Study Tools</h1>
-        <p>Loading study tools...</p>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="container mx-auto p-8">
-        <h1 className="text-3xl font-bold mb-6">Browse Available Study Tools</h1>
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-          <strong>Error:</strong> {error}
-        </div>
-      </div>
-    )
-  }
+  const hasActiveSearch = searchQuery.trim().length > 0
 
   return (
-    <div className="container mx-auto p-8">
-      <h1 className="text-3xl font-bold mb-6">Browse Available Study Tools</h1>
-      
-      <p className="mb-6 text-gray-600">
-        Found {studyTools.length} study tools in the database. Click "Test Share" to test the sharing functionality.
-      </p>
-      
-      {studyTools.length === 0 ? (
-        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
-          <strong>No study tools found.</strong> Make sure you have study tools in your database.
-        </div>
-      ) : (
-        <div className="grid gap-4">
-          {studyTools.map((studyTool) => (
-            <div key={studyTool.id} className="border rounded-lg p-4 bg-white shadow-sm">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <h3 className="text-lg font-semibold mb-2">{studyTool.title}</h3>
-                  {studyTool.description && (
-                    <p className="text-gray-600 mb-2">{studyTool.description}</p>
-                  )}
-                  <p className="text-sm text-gray-500 mb-2">Type: {studyTool.study_tool_type}</p>
-                  {studyTool.topic && (
-                    <div className="text-sm text-gray-500">
-                      <p>Topic: {studyTool.topic.title}</p>
-                      {studyTool.topic.course && (
-                        <p>Course: {studyTool.topic.course.title}</p>
-                      )}
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-400 mt-2">ID: {studyTool.id}</p>
-                </div>
-                <div className="flex space-x-2 ml-4">
-                  <Button 
-                    onClick={() => testStudyTool(studyTool.id)}
-                    size="sm"
-                  >
-                    Test Share
-                  </Button>
-                  <Button 
-                    onClick={() => copyShareUrl(studyTool.id)}
-                    variant="outline"
-                    size="sm"
-                  >
-                    Copy URL
-                  </Button>
-                </div>
-              </div>
+    <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/20">
+      <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+        {/* Header */}
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="p-2 bg-emerald-500/10 rounded-lg"><BookOpen className="h-5 w-5 text-emerald-500" /></div>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Browse Study Tools</h1>
             </div>
-          ))}
+            <p className="text-sm text-muted-foreground">Access study resources, syllabi, and lab manuals</p>
+          </div>
+          {!loading && !error && (
+            <span className="text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">{studyTools.length}</span> study tools available
+            </span>
+          )}
         </div>
-      )}
-      
-      <div className="mt-8 p-4 bg-blue-50 rounded-lg">
-        <h3 className="font-semibold mb-2">How to test:</h3>
-        <ol className="list-decimal list-inside space-y-1 text-sm">
-          <li>Click "Test Share" on any study tool above</li>
-          <li>It should open the main page with that study tool loaded</li>
-          <li>The URL should be shareable (copy and test in new tab)</li>
-          <li>Or click "Copy URL" to get the shareable link directly</li>
-        </ol>
-      </div>
-      
-      <div className="mt-4">
-        <Button onClick={() => window.location.href = '/'} variant="outline">
-          Back to Main Page
-        </Button>
-      </div>
+
+        {/* Search */}
+        {!loading && !error && studyTools.length > 0 && (
+          <div className="mb-6">
+            <div className="relative max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Search study tools..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-9 h-10" />
+              {hasActiveSearch && (
+                <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            {hasActiveSearch && (
+              <p className="text-sm text-muted-foreground mt-2">
+                Showing <span className="font-semibold text-foreground">{filteredTools.length}</span> of <span className="font-semibold text-foreground">{studyTools.length}</span> study tools
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Loading Skeletons */}
+        {loading && (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[...Array(6)].map((_, i) => <StudyToolCardSkeleton key={i} />)}
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <Card className="border-destructive/50 bg-destructive/5">
+            <CardContent className="flex items-center gap-4 p-6">
+              <div className="p-3 bg-destructive/10 rounded-full"><AlertCircle className="h-6 w-6 text-destructive" /></div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-foreground">Failed to load study tools</h3>
+                <p className="text-sm text-muted-foreground mt-1">{error}</p>
+              </div>
+              <Button onClick={fetchStudyTools} variant="outline" className="shrink-0"><RefreshCw className="h-4 w-4 mr-2" />Try again</Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Empty — no data */}
+        {!loading && !error && studyTools.length === 0 && (
+          <Card className="border-dashed border-2 bg-muted/20">
+            <CardContent className="flex flex-col items-center justify-center py-16 px-6">
+              <div className="p-6 bg-muted rounded-full mb-6"><FolderOpen className="h-12 w-12 text-muted-foreground" /></div>
+              <h3 className="text-xl font-semibold text-foreground mb-2">No study tools available</h3>
+              <p className="text-sm text-muted-foreground text-center max-w-md mb-6">No study tools have been added yet. Check back later!</p>
+              <Button variant="outline" onClick={() => window.location.href = '/'}>Back to Main Page</Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Empty — no search results */}
+        {!loading && !error && studyTools.length > 0 && filteredTools.length === 0 && (
+          <Card className="border-dashed border-2 bg-muted/20">
+            <CardContent className="flex flex-col items-center justify-center py-16 px-6">
+              <div className="p-6 bg-muted rounded-full mb-6"><Search className="h-12 w-12 text-muted-foreground" /></div>
+              <h3 className="text-xl font-semibold text-foreground mb-2">No results found</h3>
+              <p className="text-sm text-muted-foreground text-center max-w-md mb-6">No study tools match &quot;{searchQuery}&quot;. Try a different search term.</p>
+              <Button variant="outline" onClick={() => setSearchQuery("")}><X className="h-4 w-4 mr-2" />Clear search</Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Study Tool Cards */}
+        {!loading && !error && filteredTools.length > 0 && (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredTools.map(tool => (
+              <Card key={tool.id} className="group overflow-hidden hover:shadow-lg hover:border-primary/20 transition-all duration-300">
+                <CardContent className="p-5">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="p-2 bg-emerald-500/10 rounded-lg shrink-0"><BookOpen className="h-5 w-5 text-emerald-500" /></div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold text-sm leading-tight line-clamp-2 group-hover:text-primary transition-colors">{tool.title}</h3>
+                      {tool.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{tool.description}</p>}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mb-4">
+                    <Badge variant="outline" className="text-[10px] rounded-full capitalize">{tool.study_tool_type}</Badge>
+                    {tool.topic && <Badge variant="secondary" className="text-[10px] rounded-full truncate max-w-[160px]">{tool.topic.title}</Badge>}
+                    {tool.topic?.course && <Badge variant="secondary" className="text-[10px] rounded-full truncate max-w-[160px]">{tool.topic.course.title}</Badge>}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button size="sm" className="h-9 text-xs font-semibold" onClick={() => openTool(tool.id)}>
+                      <ExternalLink className="h-3 w-3 mr-1.5" />Open
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-9 text-xs font-semibold" onClick={() => copyShareUrl(tool.id)}>
+                      {copiedId === tool.id ? <><Check className="h-3 w-3 mr-1.5 text-green-500" />Copied!</> : <><Copy className="h-3 w-3 mr-1.5" />Share</>}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-8">
+          <Button onClick={() => window.location.href = '/'} variant="outline">Back to Main Page</Button>
+        </div>
+      </main>
     </div>
   )
 }

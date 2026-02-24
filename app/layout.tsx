@@ -53,7 +53,7 @@ export const metadata: Metadata = {
     url: "https://diu-learning.vercel.app",
     images: [
       {
-        url: "/images/studyhub_diu_Favicon .png",
+        url: "/images/favicon2.png",
         width: 1200,
         height: 630,
         alt: "StudyHub DIU - Computer Science & Engineering Learning Platform",
@@ -65,7 +65,7 @@ export const metadata: Metadata = {
     title: "StudyHub DIU - Smart Learning Platform",
     description: "Access comprehensive learning materials, video lectures, slides, and study tools for CSE courses at DIU. Join thousands of students enhancing their academic journey.",
     creator: "@DIU_Official",
-    images: ["/images/studyhub_diu_Favicon .png"],
+    images: ["/images/favicon2.png"],
   },
   verification: {
     google: "your-google-verification-code",
@@ -123,8 +123,8 @@ export default function RootLayout({
               "alternateName": "DIU CSE Learning Platform",
               "description": "Smart learning platform providing comprehensive educational resources including video lectures, slides, study tools, and course materials for Computer Science & Engineering students at Daffodil International University",
               "url": "https://diu-learning.vercel.app",
-              "logo": "https://diu-learning.vercel.app/images/studyhub_diu_Favicon .png",
-              "image": "https://diu-learning.vercel.app/images/studyhub_diu_Favicon .png",
+              "logo": "https://diu-learning.vercel.app/images/favicon2.png",
+              "image": "https://diu-learning.vercel.app/images/favicon2.png",
               "sameAs": [
                 "https://daffodilvarsity.edu.bd",
                 "https://facebook.com/daffodilvarsity",

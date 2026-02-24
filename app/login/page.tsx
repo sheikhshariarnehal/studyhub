@@ -72,11 +72,11 @@ export default function LoginPage() {
         const redirectUrl = data.redirectUrl || "/admin"
 
         // Force a small delay to ensure cookie is set
-        await new Promise(resolve => setTimeout(resolve, 500))
+        await new Promise(resolve => setTimeout(resolve, 300))
 
-        // Use window.location.replace for full page reload to clear cache
+        // Use Next.js router for SPA-style navigation
         console.log("🔄 Redirecting to:", redirectUrl)
-        window.location.replace(redirectUrl)
+        router.push(redirectUrl)
       } else {
         console.log("❌ Login failed:", data.error)
         setError(data.error || "Login failed")

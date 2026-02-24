@@ -2,6 +2,7 @@
 
 import { lazy, Suspense, memo } from "react"
 import { Loader2 } from "lucide-react"
+import { ContentErrorBoundary } from "./content-error-boundary"
 
 // Lazy load the heavy ContentViewer component
 const ContentViewer = lazy(() => 
@@ -50,8 +51,13 @@ export const LazyContentViewer = memo(function LazyContentViewer({
   isLoading = false 
 }: LazyContentViewerProps) {
   return (
-    <Suspense fallback={<ContentViewerSkeleton />}>
-      <ContentViewer content={content} isLoading={isLoading} />
-    </Suspense>
+    <ContentErrorBoundary
+      fallbackTitle="Content failed to load"
+      fallbackDescription="The content viewer encountered an error. Click 'Try again' to reload."
+    >
+      <Suspense fallback={<ContentViewerSkeleton />}>
+        <ContentViewer content={content} isLoading={isLoading} />
+      </Suspense>
+    </ContentErrorBoundary>
   )
 })

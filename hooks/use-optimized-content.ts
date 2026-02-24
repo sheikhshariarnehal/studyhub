@@ -80,10 +80,9 @@ export function useOptimizedContent(options: UseOptimizedContentOptions = {}) {
       apiEndpoint = `/api/slides-simple/${id}`
     } else if (type === 'video') {
       apiEndpoint = `/api/videos-simple/${id}`
-    } else if (type === 'study-tool') {
-      apiEndpoint = `/api/study-tools-simple/${id}`
     } else {
-      apiEndpoint = `/api/${type}s/${id}`
+      // study-tool, syllabus, document all resolve to study-tools
+      apiEndpoint = `/api/study-tools-simple/${id}`
     }
 
     const response = await fetch(apiEndpoint, { signal })
@@ -156,29 +155,27 @@ export function useOptimizedContent(options: UseOptimizedContentOptions = {}) {
   }, [fetchContent, enablePrefetch, preloadNext])
 
   // Prefetch related content in background
-  const prefetchRelatedContent = useCallback(async (currentContent: ContentItem) => {
+  // NOTE: /api/content/related is not yet implemented — this call is guarded
+  // to avoid spamming 404s. Remove the guard once the endpoint exists.
+  const prefetchRelatedContent = useCallback(async (_currentContent: ContentItem) => {
     if (!enablePrefetch) return
 
+    // TODO: Implement /api/content/related/[id] endpoint then enable this block
+    // For now, skip to avoid repeated 404 calls
+    /*
     try {
-      // Prefetch other content from the same topic/course
-      const relatedEndpoint = `/api/content/related/${currentContent.id}`
+      const relatedEndpoint = `/api/content/related/${_currentContent.id}`
       const response = await fetch(relatedEndpoint)
       
       if (response.ok) {
         const relatedItems = await response.json()
-        
-        // Prefetch up to 3 related items
         const itemsToPrefetch = relatedItems.slice(0, 3)
         
         for (const item of itemsToPrefetch) {
           if (!prefetchQueueRef.current.has(item.id)) {
             prefetchQueueRef.current.add(item.id)
-            
-            // Prefetch in background without blocking
             setTimeout(() => {
-              fetchContent(item.type, item.id).catch(() => {
-                // Ignore prefetch errors
-              }).finally(() => {
+              fetchContent(item.type, item.id).catch(() => {}).finally(() => {
                 prefetchQueueRef.current.delete(item.id)
               })
             }, 1000)
@@ -188,6 +185,7 @@ export function useOptimizedContent(options: UseOptimizedContentOptions = {}) {
     } catch {
       // Ignore prefetch errors
     }
+    */
   }, [enablePrefetch, fetchContent])
 
   // Clear content

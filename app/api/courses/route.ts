@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { errorResponse, getSupabaseClient } from "@/lib/api-utils"
 
 /**
  * GET /api/courses
@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase"
  */
 export async function GET(request: Request) {
   try {
+    const supabase = getSupabaseClient()
     const { searchParams } = new URL(request.url)
     const semesterId = searchParams.get("semester_id")
     const search = searchParams.get("search")
@@ -40,22 +41,18 @@ export async function GET(request: Request) {
     const { data: courses, error } = await query
 
     if (error) {
-      console.error("Error fetching courses:", error)
-      return NextResponse.json(
-        { success: false, error: "Failed to fetch courses" },
-        { status: 500 }
-      )
+      return errorResponse("Failed to fetch courses", 500, error)
     }
 
     return NextResponse.json({
       success: true,
-      courses: courses || []
+      courses: courses || [],
     })
   } catch (error) {
-    console.error("Error in courses API:", error)
-    return NextResponse.json(
-      { success: false, error: "Internal server error" },
-      { status: 500 }
+    return errorResponse(
+      "Internal server error",
+      500,
+      error instanceof Error ? error.message : "Unknown error"
     )
   }
 }

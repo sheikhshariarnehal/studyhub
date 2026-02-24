@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase"
+import { errorResponse, getSupabaseClient } from "@/lib/api-utils"
 
 export async function GET() {
   try {
-    console.log("Fetching all slides...")
-    
-    const supabase = createClient()
-    
+    const supabase = getSupabaseClient()
+
     const { data, error } = await supabase
       .from("slides")
       .select(`
@@ -26,26 +24,19 @@ export async function GET() {
       .limit(10)
 
     if (error) {
-      console.error("Error fetching slides:", error)
-      return NextResponse.json({ 
-        error: error.message,
-        code: error.code
-      }, { status: 500 })
+      return errorResponse(`Failed to fetch slides: ${error.message}`, 500, error)
     }
 
-    console.log(`Found ${data?.length || 0} slides`)
-    
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
       count: data?.length || 0,
-      slides: data || []
+      slides: data || [],
     })
-    
   } catch (err) {
-    console.error("API Error:", err)
-    return NextResponse.json({ 
-      error: "Failed to fetch slides",
-      details: err instanceof Error ? err.message : 'Unknown error'
-    }, { status: 500 })
+    return errorResponse(
+      "Failed to fetch slides",
+      500,
+      err instanceof Error ? err.message : "Unknown error"
+    )
   }
 }
