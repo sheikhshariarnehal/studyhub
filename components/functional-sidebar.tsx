@@ -1159,7 +1159,10 @@ const StudyToolItem = memo<StudyToolItemProps>(({
     if (tool.type === "syllabus") {
       onContentClick("syllabus", tool.title, `#syllabus-${tool.id}`, tool.id, undefined, courseTitle, tool.description || '', courseCode, semesterInfo)
     } else if (tool.content_url) {
-      onContentClick("study-tool", tool.title, tool.content_url, tool.id, undefined, courseTitle, undefined, courseCode, semesterInfo)
+      onContentClick("study-tool", tool.title, tool.content_url, tool.id, undefined, courseTitle, tool.description || '', courseCode, semesterInfo)
+    } else if (tool.description) {
+      // For tools like mark_distribution that have description but no content_url
+      onContentClick("study-tool", tool.title, `#study-tool-${tool.id}`, tool.id, undefined, courseTitle, tool.description, courseCode, semesterInfo)
     }
   }, [tool, courseTitle, courseCode, onContentClick, semesterInfo])
 
@@ -1170,7 +1173,7 @@ const StudyToolItem = memo<StudyToolItemProps>(({
         isSelected ? "bg-primary/10 text-primary" : "hover:bg-accent/50"
       }`}
       onClick={handleClick}
-      disabled={tool.type !== "syllabus" && !tool.content_url}
+      disabled={tool.type !== "syllabus" && !tool.content_url && !tool.description}
     >
       <div className="flex items-center gap-2 w-full">
         {getStudyToolIcon(tool.type)}

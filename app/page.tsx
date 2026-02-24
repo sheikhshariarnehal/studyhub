@@ -139,12 +139,13 @@ export default function HomePage() {
                   (contentData.studyToolType === 'syllabus' ? 'syllabus' : 'study-tool') :
                   parsedUrl.type as "slide" | "video",
             title: contentData.title,
-            url: contentData.url,
+            url: contentData.url || `#study-tool-${contentData.id}`,
             topicTitle: parsedUrl.type === 'study-tool' ? undefined : contentData.topic?.title,
             courseTitle: parsedUrl.type === 'study-tool' ?
                   contentData.course?.title :
                   (contentData.topic?.course?.title || contentData.course?.title),
             description: contentData.description,
+            courseCode: parsedUrl.type === 'study-tool' ? contentData.course?.course_code : undefined,
             // Include semester info for sidebar auto-selection
             semesterInfo: contentData.semesterInfo || contentData.course?.semester || contentData.topic?.course?.semester,
           }

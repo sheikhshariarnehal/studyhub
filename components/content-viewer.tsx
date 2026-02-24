@@ -53,11 +53,18 @@ export const ContentViewer = memo(function ContentViewer({ content, isLoading = 
 
   const isMobile = useIsMobile()
 
+  // Check if this is a description-only content item (no file to embed)
+  const isDescriptionOnly = useMemo(() => {
+    if (content.type === "syllabus") return true
+    if (content.type === "study-tool" && content.description && (!content.url || content.url.startsWith('#'))) return true
+    return false
+  }, [content.type, content.description, content.url])
+
   // Memoized values for better performance
   const contentUrl = useMemo(() => {
-    if (content.type === "syllabus") return ""
+    if (isDescriptionOnly) return ""
     return content.url
-  }, [content.url, content.type])
+  }, [content.url, isDescriptionOnly])
 
   const iframeStyle = useMemo(() => ({
     transform: `scale(${zoomLevel / 100}) rotate(${isRotated}deg)`,
@@ -76,8 +83,8 @@ export const ContentViewer = memo(function ContentViewer({ content, isLoading = 
   }, [isFullscreen, isMobile])
 
   useEffect(() => {
-    // Don't show loading for syllabus content since it doesn't use iframe
-    if (content.type !== "syllabus") {
+    // Don't show loading for description-only content since it doesn't use iframe
+    if (!isDescriptionOnly) {
       setIframeLoading(true)
     } else {
       setIframeLoading(false)
@@ -98,7 +105,7 @@ export const ContentViewer = memo(function ContentViewer({ content, isLoading = 
         clearInterval(viewTimeRef.current)
       }
     }
-  }, [content.url, content.type])
+  }, [content.url, content.type, isDescriptionOnly])
 
   const handleIframeLoad = useCallback(() => {
     setIframeLoading(false)
@@ -376,7 +383,8 @@ export const ContentViewer = memo(function ContentViewer({ content, isLoading = 
   }
 
   // Fix YouTube URL format and Google Drive URLs
-  const getEmbedUrl = (url: string, type: string) => {
+  const getEmbedUrl = (url: string | null | undefined, type: string) => {
+    if (!url) return ""
     if (type === "video") {
       // Handle various YouTube URL formats
       let videoId = ""
@@ -478,8 +486,8 @@ export const ContentViewer = memo(function ContentViewer({ content, isLoading = 
       ${isFullscreen ? 'fixed inset-0 z-50 rounded-none' : ''}
       ${isMobile ? 'mobile-content-viewer' : ''}
     `}>
-      {/* Content Header - Hidden for syllabus */}
-      {content.type !== "syllabus" && (
+      {/* Content Header - Hidden for description-only content (syllabus, mark distribution, etc.) */}
+      {!isDescriptionOnly && (
         <div className={`
           absolute top-0 left-0 right-0 z-20
           bg-gradient-to-b from-black/0 via-black/0 to-transparent
@@ -799,7 +807,7 @@ export const ContentViewer = memo(function ContentViewer({ content, isLoading = 
         }}
       >
 
-        {content.type === "syllabus" ? (
+        {isDescriptionOnly ? (
           <div className="w-full h-full bg-white dark:bg-gray-800 overflow-y-auto
             px-4 py-6 sm:px-6 sm:py-8 md:px-8 md:py-10 lg:px-12 lg:py-12">
             <div className="max-w-4xl mx-auto">
