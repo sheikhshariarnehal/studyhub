@@ -126,6 +126,24 @@ function handleShareableUrl(request: NextRequest, pathname: string): NextRespons
 }
 
 // ============================================
+// Debug/Test Route Blocker (Production Only)
+// ============================================
+
+const BLOCKED_PATH_PREFIXES = [
+  "/debug-",
+  "/test-",
+  "/minimal-test",
+  "/simple-login",
+  "/demo",
+  "/api/debug-",
+  "/api/test-",
+]
+
+function isBlockedRoute(pathname: string): boolean {
+  return !isDev && BLOCKED_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+}
+
+// ============================================
 // Main Proxy Function (Next.js 16+)
 // ============================================
 
@@ -134,6 +152,11 @@ export function proxy(request: NextRequest) {
 
   log("\n--- Proxy Request ---")
   log("Path:", pathname)
+
+  // ---- Block debug/test routes in production ----
+  if (isBlockedRoute(pathname)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 })
+  }
 
   // Create base response with analytics headers
   const baseResponse = NextResponse.next()
@@ -183,5 +206,13 @@ export const config = {
     '/:semester/:course/video/:id*',
     '/:semester/:course/slide/:id*',
     '/:semester/:course/study-tool/:id*',
+    // Debug/test routes (blocked in production)
+    '/debug-:path*',
+    '/test-:path*',
+    '/minimal-test/:path*',
+    '/simple-login/:path*',
+    '/demo/:path*',
+    '/api/debug-:path*',
+    '/api/test-:path*',
   ]
 }

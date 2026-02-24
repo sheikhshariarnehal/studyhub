@@ -1,13 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import { Download, Maximize } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { FunctionalSidebar } from "@/components/functional-sidebar"
 import { LazyContentViewer } from "@/components/lazy-content-viewer"
-import { Header } from "@/components/header"
 import { useOptimizedContent } from "@/hooks/use-optimized-content"
 import { performanceMonitor, measureAsync } from "@/lib/performance"
 import { useToast } from "@/hooks/use-toast"
@@ -16,6 +15,16 @@ import { useIsMobile } from "@/components/ui/use-mobile"
 
 import { trackContentEvent, trackDownloadEvent, trackError } from "@/lib/analytics"
 import { generateSimpleShareUrl, parseSimpleShareUrl, updateUrlWithoutNavigation } from "@/lib/simple-share-utils"
+
+// Lazy-load heavy components to reduce initial JS bundle
+const FunctionalSidebar = dynamic(
+  () => import("@/components/functional-sidebar").then(mod => ({ default: mod.FunctionalSidebar })),
+  { ssr: false }
+)
+const Header = dynamic(
+  () => import("@/components/header").then(mod => ({ default: mod.Header })),
+  { ssr: false }
+)
 
 interface ContentItem {
   type: "slide" | "video" | "document" | "syllabus" | "study-tool"

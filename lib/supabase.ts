@@ -90,41 +90,35 @@ const { url: browserUrl, key: browserKey } = getSupabaseConfig()
 export const supabase = createSupabaseClient(browserUrl, browserKey)
 
 /* -------------------------------------------------------------------------- */
-/* 2. Helper for server-side code (API routes, Server Actions, etc.)          */
+/* 2. Singleton for server-side code (API routes, Server Actions, etc.)       */
+/*    Reuses a single client instance to avoid per-request overhead.          */
 /* -------------------------------------------------------------------------- */
+let _serverClient: ReturnType<typeof createSupabaseClient> | null = null
+
 export function createClient() {
-  try {
-    const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  if (_serverClient) return _serverClient
 
-    if (!url || !key) {
-      console.error("Supabase configuration missing:", {
-        hasUrl: !!url,
-        hasKey: !!key,
-        envVars: {
-          SUPABASE_URL: !!process.env.SUPABASE_URL,
-          NEXT_PUBLIC_SUPABASE_URL: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-          SUPABASE_SERVICE_ROLE_KEY: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-        }
-      })
-      throw new Error("Missing Supabase environment variables")
-    }
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-    console.log("Creating Supabase client with:", { url, keyType: key.includes('service_role') ? 'service_role' : 'anon' })
-
-    return createSupabaseClient(url, key, {
-      auth: { persistSession: false },
-      global: {
-        headers: {
-          'User-Agent': 'learning-platform-api'
-        }
-      }
+  if (!url || !key) {
+    console.error("Supabase configuration missing:", {
+      hasUrl: !!url,
+      hasKey: !!key,
     })
-  } catch (error) {
-    console.error("Error creating Supabase client:", error)
-    throw error
+    throw new Error("Missing Supabase environment variables")
   }
+
+  _serverClient = createSupabaseClient(url, key, {
+    auth: { persistSession: false },
+    global: {
+      headers: {
+        'User-Agent': 'learning-platform-api'
+      }
+    }
+  })
+
+  return _serverClient
 }
 
 /* -------------------------------------------------------------------------- */

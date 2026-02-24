@@ -7,14 +7,13 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { generateSimpleShareUrl } from "@/lib/simple-share-utils"
-import { Play, Search, Copy, Check, ExternalLink, FolderOpen, X, RefreshCw, AlertCircle } from "lucide-react"
+import { Play, Search, Copy, Check, ExternalLink, FolderOpen, X, RefreshCw, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react"
 
 interface Video {
   id: string
   title: string
   youtube_url: string
   description?: string
-  duration?: string
   topic?: {
     id: string
     title: string
@@ -24,6 +23,8 @@ interface Video {
     }
   }
 }
+
+const PAGE_SIZE = 20
 
 function VideoCardSkeleton() {
   return (
@@ -55,15 +56,21 @@ export default function BrowseVideosPage() {
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
 
-  const fetchVideos = useCallback(async () => {
+  const fetchVideos = useCallback(async (p = page) => {
     try {
       setLoading(true)
       setError(null)
-      const response = await fetch('/api/videos-list')
+      const response = await fetch(`/api/videos-list?page=${p}&limit=${PAGE_SIZE}`)
       const data = await response.json()
       if (response.ok) {
         setVideos(data.videos || [])
+        setTotalPages(data.totalPages || 1)
+        setTotal(data.total || 0)
+        setPage(data.page || p)
       } else {
         setError(data.error || 'Failed to fetch videos')
       }
@@ -72,9 +79,15 @@ export default function BrowseVideosPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [page])
 
-  useEffect(() => { fetchVideos() }, [fetchVideos])
+  useEffect(() => { fetchVideos(1) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const goToPage = (p: number) => {
+    if (p < 1 || p > totalPages) return
+    fetchVideos(p)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   const filteredVideos = useMemo(() => {
     if (!searchQuery.trim()) return videos
@@ -113,7 +126,7 @@ export default function BrowseVideosPage() {
           </div>
           {!loading && !error && (
             <span className="text-sm text-muted-foreground">
-              <span className="font-semibold text-foreground">{videos.length}</span> videos available
+              <span className="font-semibold text-foreground">{total}</span> videos available
             </span>
           )}
         </div>
@@ -197,7 +210,6 @@ export default function BrowseVideosPage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5 mb-4">
-                    {video.duration && <Badge variant="outline" className="text-[10px] rounded-full">{video.duration}</Badge>}
                     {video.topic && <Badge variant="secondary" className="text-[10px] rounded-full truncate max-w-[160px]">{video.topic.title}</Badge>}
                     {video.topic?.course && <Badge variant="secondary" className="text-[10px] rounded-full truncate max-w-[160px]">{video.topic.course.title}</Badge>}
                   </div>
@@ -212,6 +224,31 @@ export default function BrowseVideosPage() {
                 </CardContent>
               </Card>
             ))}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && !error && totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-8">
+            <Button variant="outline" size="sm" onClick={() => goToPage(page - 1)} disabled={page <= 1}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+              let p: number
+              if (totalPages <= 7) { p = i + 1 }
+              else if (page <= 4) { p = i + 1 }
+              else if (page >= totalPages - 3) { p = totalPages - 6 + i }
+              else { p = page - 3 + i }
+              return (
+                <Button key={p} variant={p === page ? "default" : "outline"} size="sm" className="min-w-[36px]" onClick={() => goToPage(p)}>
+                  {p}
+                </Button>
+              )
+            })}
+            <Button variant="outline" size="sm" onClick={() => goToPage(page + 1)} disabled={page >= totalPages}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <span className="text-xs text-muted-foreground ml-2">Page {page} of {totalPages}</span>
           </div>
         )}
 

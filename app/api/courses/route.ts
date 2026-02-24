@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server"
 import { errorResponse, getSupabaseClient } from "@/lib/api-utils"
 
+export const revalidate = 60
+
+const CACHE_HEADERS = {
+  "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+}
+
 /**
  * GET /api/courses
  * Fetch all courses with optional filtering
@@ -44,10 +50,10 @@ export async function GET(request: Request) {
       return errorResponse("Failed to fetch courses", 500, error)
     }
 
-    return NextResponse.json({
-      success: true,
-      courses: courses || [],
-    })
+    return NextResponse.json(
+      { success: true, courses: courses || [] },
+      { headers: CACHE_HEADERS }
+    )
   } catch (error) {
     return errorResponse(
       "Internal server error",

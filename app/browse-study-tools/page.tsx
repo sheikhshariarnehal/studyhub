@@ -7,23 +7,21 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { generateSimpleShareUrl } from "@/lib/simple-share-utils"
-import { BookOpen, Search, Copy, Check, ExternalLink, FolderOpen, X, RefreshCw, AlertCircle } from "lucide-react"
+import { BookOpen, Search, Copy, Check, ExternalLink, FolderOpen, X, RefreshCw, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react"
 
 interface StudyTool {
   id: string
   title: string
-  google_drive_url: string
+  content_url: string
   description?: string
-  study_tool_type: string
-  topic?: {
+  type: string
+  course?: {
     id: string
     title: string
-    course?: {
-      id: string
-      title: string
-    }
   }
 }
+
+const PAGE_SIZE = 20
 
 function StudyToolCardSkeleton() {
   return (
@@ -55,15 +53,21 @@ export default function BrowseStudyToolsPage() {
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
 
-  const fetchStudyTools = useCallback(async () => {
+  const fetchStudyTools = useCallback(async (p = page) => {
     try {
       setLoading(true)
       setError(null)
-      const response = await fetch('/api/study-tools-list')
+      const response = await fetch(`/api/study-tools-list?page=${p}&limit=${PAGE_SIZE}`)
       const data = await response.json()
       if (response.ok) {
         setStudyTools(data.studyTools || [])
+        setTotalPages(data.totalPages || 1)
+        setTotal(data.total || 0)
+        setPage(data.page || p)
       } else {
         setError(data.error || 'Failed to fetch study tools')
       }
@@ -72,9 +76,15 @@ export default function BrowseStudyToolsPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [page])
 
-  useEffect(() => { fetchStudyTools() }, [fetchStudyTools])
+  useEffect(() => { fetchStudyTools(1) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const goToPage = (p: number) => {
+    if (p < 1 || p > totalPages) return
+    fetchStudyTools(p)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   const filteredTools = useMemo(() => {
     if (!searchQuery.trim()) return studyTools
@@ -82,9 +92,8 @@ export default function BrowseStudyToolsPage() {
     return studyTools.filter(t =>
       t.title.toLowerCase().includes(q) ||
       t.description?.toLowerCase().includes(q) ||
-      t.study_tool_type.toLowerCase().includes(q) ||
-      t.topic?.title.toLowerCase().includes(q) ||
-      t.topic?.course?.title.toLowerCase().includes(q)
+      t.type.toLowerCase().includes(q) ||
+      t.course?.title.toLowerCase().includes(q)
     )
   }, [studyTools, searchQuery])
 
@@ -114,7 +123,7 @@ export default function BrowseStudyToolsPage() {
           </div>
           {!loading && !error && (
             <span className="text-sm text-muted-foreground">
-              <span className="font-semibold text-foreground">{studyTools.length}</span> study tools available
+              <span className="font-semibold text-foreground">{total}</span> study tools available
             </span>
           )}
         </div>
@@ -198,9 +207,8 @@ export default function BrowseStudyToolsPage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5 mb-4">
-                    <Badge variant="outline" className="text-[10px] rounded-full capitalize">{tool.study_tool_type}</Badge>
-                    {tool.topic && <Badge variant="secondary" className="text-[10px] rounded-full truncate max-w-[160px]">{tool.topic.title}</Badge>}
-                    {tool.topic?.course && <Badge variant="secondary" className="text-[10px] rounded-full truncate max-w-[160px]">{tool.topic.course.title}</Badge>}
+                    <Badge variant="outline" className="text-[10px] rounded-full capitalize">{tool.type?.replace('_', ' ')}</Badge>
+                    {tool.course && <Badge variant="secondary" className="text-[10px] rounded-full truncate max-w-[160px]">{tool.course.title}</Badge>}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <Button size="sm" className="h-9 text-xs font-semibold" onClick={() => openTool(tool.id)}>
@@ -213,6 +221,31 @@ export default function BrowseStudyToolsPage() {
                 </CardContent>
               </Card>
             ))}
+          </div>
+        )}
+
+        {/* Pagination */}
+        {!loading && !error && totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-8">
+            <Button variant="outline" size="sm" onClick={() => goToPage(page - 1)} disabled={page <= 1}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+              let p: number
+              if (totalPages <= 7) { p = i + 1 }
+              else if (page <= 4) { p = i + 1 }
+              else if (page >= totalPages - 3) { p = totalPages - 6 + i }
+              else { p = page - 3 + i }
+              return (
+                <Button key={p} variant={p === page ? "default" : "outline"} size="sm" className="min-w-[36px]" onClick={() => goToPage(p)}>
+                  {p}
+                </Button>
+              )
+            })}
+            <Button variant="outline" size="sm" onClick={() => goToPage(page + 1)} disabled={page >= totalPages}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <span className="text-xs text-muted-foreground ml-2">Page {page} of {totalPages}</span>
           </div>
         )}
 
