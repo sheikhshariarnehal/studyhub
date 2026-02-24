@@ -248,20 +248,6 @@ export default function HomePage() {
           if (highlightedContent) {
             setSelectedContent(highlightedContent)
             
-            // Show appropriate toast based on content type
-            const contentTypeLabel = highlightedContent.type === "syllabus" 
-              ? "Syllabus" 
-              : highlightedContent.type === "slide" 
-              ? "Slide" 
-              : highlightedContent.type === "video" 
-              ? "Video"
-              : "Content"
-            
-            toast({
-              title: "✨ Featured Course Loaded",
-              description: `Showing ${contentTypeLabel}: ${highlightedContent.title}`,
-              duration: 4000,
-            })
             return
           }
         } else if (highlightedResponse.status === 404) {
