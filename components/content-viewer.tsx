@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback, memo, useMemo } from "react"
 import {
   Loader2, AlertCircle, FileText, Play, BookOpen, ExternalLink, Maximize2, RotateCcw,
   ZoomIn, ZoomOut, RotateCw, Volume2, VolumeX, Settings, Share2, Bookmark,
-  PictureInPicture, Download, RefreshCw, Eye, EyeOff, Clock, Pause
+  Download, RefreshCw, Eye, EyeOff, Clock, Pause
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -505,8 +505,8 @@ export const ContentViewer = memo(function ContentViewer({ content, isLoading = 
       ${isFullscreen ? 'fixed inset-0 z-50 rounded-none' : ''}
       ${isMobile ? 'mobile-content-viewer' : ''}
     `}>
-      {/* Content Header - Hidden for description-only content (syllabus, mark distribution, etc.) */}
-      {!isDescriptionOnly && (
+      {/* Content Header - Hidden for description-only content (syllabus, mark distribution, etc.) and videos */}
+      {!isDescriptionOnly && content.type !== "video" && !content.url?.includes('youtube.com') && !content.url?.includes('youtu.be') && (
         <div className={`
           absolute top-0 left-0 right-0 z-20
           bg-gradient-to-b from-black/0 via-black/0 to-transparent
@@ -549,11 +549,9 @@ export const ContentViewer = memo(function ContentViewer({ content, isLoading = 
               className={`
                 font-medium
                 ${isMobile ? 'text-xs px-1.5 py-0.5' : 'text-xs px-2 py-1'}
-                ${content.type === "video"
-                  ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"
-                  : content.type === "slide"
-                    ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-                    : "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                ${content.type === "slide"
+                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                  : "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
                 }
               `}
             >
@@ -621,18 +619,7 @@ export const ContentViewer = memo(function ContentViewer({ content, isLoading = 
                   <RotateCw className="h-3 w-3" />
                 </Button>
 
-                {/* Picture in Picture for videos */}
-                {content.type === 'video' && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handlePictureInPicture}
-                    className="text-white hover:bg-white/20 p-1.5 h-auto touch-manipulation"
-                    title="Picture in picture"
-                  >
-                    <PictureInPicture className="h-3 w-3" />
-                  </Button>
-                )}
+
 
                 {/* Fullscreen */}
                 <Button
@@ -1056,7 +1043,7 @@ export const ContentViewer = memo(function ContentViewer({ content, isLoading = 
       )}
 
       {/* Zoom Level Indicator - Desktop only when not 100% */}
-      {!isMobile && zoomLevel !== 100 && (
+      {!isMobile && zoomLevel !== 100 && content.type !== "video" && (
         <div className="absolute top-4 left-4 z-30">
           <div className="bg-black/60 backdrop-blur-sm rounded-lg px-3 py-1 text-white text-sm">
             {zoomLevel}%
