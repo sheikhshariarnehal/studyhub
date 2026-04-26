@@ -882,9 +882,6 @@ export function FunctionalSidebar({
         ) : (
           /* Desktop Header */
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold text-foreground">Course Content</h3>
-            </div>
 
             {/* Desktop Semester Selection */}
             <Select value={selectedSemester} onValueChange={setSelectedSemester}>
