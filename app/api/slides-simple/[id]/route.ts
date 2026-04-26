@@ -73,6 +73,8 @@ export async function GET(
       id: data.id,
       title: data.title,
       url: data.google_drive_url,
+      topicId: data.topic?.id,
+      courseId: data.topic?.course?.id,
       description: data.description,
       type: "slide" as const,
       file_size_mb: data.file_size_mb,

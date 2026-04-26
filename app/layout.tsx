@@ -53,7 +53,7 @@ export const metadata: Metadata = {
     url: "https://diu-learning.vercel.app",
     images: [
       {
-        url: "/images/favicon2.png",
+        url: "/images/favicon2.webp",
         width: 1200,
         height: 630,
         alt: "StudyHub DIU - Computer Science & Engineering Learning Platform",
@@ -65,7 +65,7 @@ export const metadata: Metadata = {
     title: "StudyHub DIU - Smart Learning Platform",
     description: "Access comprehensive learning materials, video lectures, slides, and study tools for CSE courses at DIU. Join thousands of students enhancing their academic journey.",
     creator: "@DIU_Official",
-    images: ["/images/favicon2.png"],
+    images: ["/images/favicon2.webp"],
   },
   verification: {
     google: "your-google-verification-code",
@@ -76,6 +76,11 @@ export const metadata: Metadata = {
   category: "education",
   classification: "Educational Platform",
   metadataBase: new URL('https://diu-learning.vercel.app'),
+  icons: {
+    icon: '/images/favicon2.webp',
+    shortcut: '/images/favicon2.webp',
+    apple: '/images/favicon2.webp',
+  },
 }
 
 export default function RootLayout({
@@ -85,20 +90,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        {/* Performance optimizations */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link rel="preconnect" href="https://drive.google.com" />
-        <link rel="preconnect" href="https://youtube.com" />
-        <link rel="dns-prefetch" href="//fonts.googleapis.com" />
-        <link rel="dns-prefetch" href="//fonts.gstatic.com" />
-        <link rel="dns-prefetch" href="//drive.google.com" />
-        <link rel="dns-prefetch" href="//youtube.com" />
+      <head suppressHydrationWarning>
+        {/* Keep head lean; preconnect hints should be route-specific when needed. */}
 
   {/* App icons and manifest */}
-  <link rel="icon" href="/images/favicon2.png" type="image/png" />
-  <link rel="apple-touch-icon" href="/images/favicon2.png" />
+  <link rel="icon" href="/images/favicon2.webp" type="image/webp" />
+  <link rel="apple-touch-icon" href="/images/favicon2.webp" />
         <link rel="manifest" href="/manifest.json" />
 
         {/* Theme colors */}
@@ -115,6 +112,7 @@ export default function RootLayout({
         {/* Structured data for SEO */}
         <script
           type="application/ld+json"
+          suppressHydrationWarning
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               "@context": "https://schema.org",
@@ -123,8 +121,8 @@ export default function RootLayout({
               "alternateName": "DIU CSE Learning Platform",
               "description": "Smart learning platform providing comprehensive educational resources including video lectures, slides, study tools, and course materials for Computer Science & Engineering students at Daffodil International University",
               "url": "https://diu-learning.vercel.app",
-              "logo": "https://diu-learning.vercel.app/images/favicon2.png",
-              "image": "https://diu-learning.vercel.app/images/favicon2.png",
+              "logo": "https://diu-learning.vercel.app/images/favicon2.webp",
+              "image": "https://diu-learning.vercel.app/images/favicon2.webp",
               "sameAs": [
                 "https://daffodilvarsity.edu.bd",
                 "https://facebook.com/daffodilvarsity",
@@ -172,6 +170,7 @@ export default function RootLayout({
         />
         <script
           type="application/ld+json"
+          suppressHydrationWarning
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({
               "@context": "https://schema.org",

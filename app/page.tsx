@@ -35,6 +35,8 @@ interface ContentItem {
   courseTitle?: string
   description?: string
   courseCode?: string
+  courseId?: string
+  topicId?: string
   teacherName?: string
   semesterInfo?: {
     id: string
@@ -156,6 +158,10 @@ export default function HomePage() {
                   (contentData.topic?.course?.title || contentData.course?.title),
             description: contentData.description,
             courseCode: parsedUrl.type === 'study-tool' ? contentData.course?.course_code : undefined,
+            courseId: parsedUrl.type === 'study-tool'
+              ? contentData.course?.id
+              : (contentData.topic?.course?.id || contentData.course?.id),
+            topicId: parsedUrl.type === 'study-tool' ? undefined : contentData.topic?.id,
             // Include semester info for sidebar auto-selection
             semesterInfo: contentData.semesterInfo || contentData.course?.semester || contentData.topic?.course?.semester,
           }
@@ -505,6 +511,9 @@ export default function HomePage() {
               <FunctionalSidebar
                 onContentSelect={handleContentSelect}
                 selectedContentId={selectedContent?.id}
+                selectedContentType={selectedContent?.type}
+                selectedCourseId={selectedContent?.courseId}
+                selectedTopicId={selectedContent?.topicId}
                 initialSemesterId={selectedContent?.semesterInfo?.id}
               />
             </div>
@@ -577,8 +586,8 @@ export default function HomePage() {
                 <div className="flex items-center justify-center h-full p-4 sm:p-6 lg:p-8">
                   <div className="text-center max-w-sm sm:max-w-md lg:max-w-lg animate-slide-up">
                     {/* Logo */}
-                    <div className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 gradient-primary rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-primary-lg transform hover:scale-105 transition-transform duration-300">
-                      <span className="text-primary-foreground font-bold text-xl sm:text-2xl lg:text-3xl">DIU</span>
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-primary-lg transform hover:scale-105 transition-transform duration-300 overflow-hidden">
+                      <img src="/images/favicon2.webp" alt="StudyHub DIU Logo" className="w-full h-full object-cover" />
                     </div>
 
                     {/* Title */}
@@ -628,6 +637,9 @@ export default function HomePage() {
                 <FunctionalSidebar
                   onContentSelect={handleContentSelect}
                   selectedContentId={selectedContent?.id}
+                  selectedContentType={selectedContent?.type}
+                  selectedCourseId={selectedContent?.courseId}
+                  selectedTopicId={selectedContent?.topicId}
                   initialSemesterId={selectedContent?.semesterInfo?.id}
                 />
               </div>

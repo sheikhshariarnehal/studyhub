@@ -85,24 +85,11 @@ export function Header({ className }: HeaderProps) {
               className="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity group"
             >
               {/* Logo Icon */}
-              <div className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center flex-shrink-0">
-                <img
-                  src="/images/favicon.png"
-                  alt="StudyHub DIU"
-                  className="w-full h-full object-cover dark:invert"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement
-                    target.style.display = 'none'
-                    const parent = target.parentElement
-                    if (parent && !parent.querySelector('.fallback-text')) {
-                      const fallback = document.createElement('span')
-                      fallback.className = 'fallback-text text-primary font-semibold text-sm'
-                      fallback.textContent = 'SH'
-                      parent.appendChild(fallback)
-                    }
-                  }}
-                />
-              </div>
+              <img
+                src="/images/favicon2.webp"
+                alt="StudyHub DIU"
+                className="w-8 h-8 sm:w-10 sm:h-10 object-contain rounded-md"
+              />
               
               {/* Brand Text - Always visible */}
               <div className="flex flex-col">

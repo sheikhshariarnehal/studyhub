@@ -8,7 +8,7 @@ export async function GET() {
       .from("slides")
       .select(`
         *,
-        topics(title, courses(title))
+        topics(id, title, courses(id, title))
       `)
       .limit(1)
 
@@ -19,6 +19,8 @@ export async function GET() {
         title: slide.title,
         url: slide.google_drive_url,
         id: slide.id,
+        topicId: slide.topics?.id,
+        courseId: slide.topics?.courses?.id,
         topicTitle: slide.topics?.title,
         courseTitle: slide.topics?.courses?.title,
       })
@@ -29,7 +31,7 @@ export async function GET() {
       .from("videos")
       .select(`
         *,
-        topics(title, courses(title))
+        topics(id, title, courses(id, title))
       `)
       .limit(1)
 
@@ -40,6 +42,8 @@ export async function GET() {
         title: video.title,
         url: video.youtube_url,
         id: video.id,
+        topicId: video.topics?.id,
+        courseId: video.topics?.courses?.id,
         topicTitle: video.topics?.title,
         courseTitle: video.topics?.courses?.title,
       })

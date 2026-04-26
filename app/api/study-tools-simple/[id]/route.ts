@@ -85,6 +85,7 @@ export async function GET(
       id: data.id,
       title: data.title,
       url: data.content_url,
+      courseId: data.course?.id,
       description: data.description,
       type: studyToolType as 'syllabus' | 'study-tool',
       studyToolType: data.type,

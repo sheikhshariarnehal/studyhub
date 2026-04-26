@@ -83,6 +83,8 @@ export async function GET(
       id: data.id,
       title: data.title,
       url: data.youtube_url,
+      topicId: data.topic?.id,
+      courseId: data.topic?.course?.id,
       description: data.description,
       type: "video" as const,
       duration_minutes: data.duration_minutes,

@@ -56,7 +56,7 @@ const formatTopicTitle = (index: number, title: string, maxLength: number = 42):
   return `${prefix}${smartTruncate(title, availableLength)}`
 }
 
-interface ContentItem {
+export interface ContentItem {
   type: "slide" | "video" | "document" | "syllabus" | "study-tool"
   title: string
   url: string
@@ -65,6 +65,8 @@ interface ContentItem {
   courseTitle?: string
   description?: string
   courseCode?: string
+  courseId?: string
+  topicId?: string
   teacherName?: string
   semesterInfo?: {
     id: string
@@ -74,23 +76,32 @@ interface ContentItem {
   }
 }
 
-interface FunctionalSidebarProps {
+export interface FunctionalSidebarProps {
   onContentSelect: (content: ContentItem) => void
   selectedContentId?: string
+  selectedContentType?: ContentItem["type"]
+  selectedCourseId?: string
+  selectedTopicId?: string
   initialSemesterId?: string // Auto-select this semester when loading content from URL
 }
 
 // Optimized cache system with LRU eviction
 const dataCache = new Map<string, { data: any; timestamp: number; hits: number }>()
+const inFlightCache = new Map<string, Promise<any>>()
 const CACHE_DURATION = 10 * 60 * 1000 // 10 minutes
 const MAX_CACHE_SIZE = 100
 
 // LRU cache helper
-const getCachedData = async (key: string, fetchFn: () => Promise<any>): Promise<any> => {
+const getCachedData = async <T,>(key: string, fetchFn: () => Promise<T>): Promise<T> => {
   const cached = dataCache.get(key)
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
     cached.hits++
-    return cached.data
+    return cached.data as T
+  }
+
+  const inFlight = inFlightCache.get(key)
+  if (inFlight) {
+    return inFlight as Promise<T>
   }
 
   // LRU eviction if cache is full
@@ -100,9 +111,19 @@ const getCachedData = async (key: string, fetchFn: () => Promise<any>): Promise<
     if (lruKey) dataCache.delete(lruKey)
   }
 
-  const data = await fetchFn()
-  dataCache.set(key, { data, timestamp: Date.now(), hits: 1 })
-  return data
+  const fetchPromise = (async () => {
+    const data = await fetchFn()
+    dataCache.set(key, { data, timestamp: Date.now(), hits: 1 })
+    return data
+  })()
+
+  inFlightCache.set(key, fetchPromise)
+
+  try {
+    return await fetchPromise
+  } finally {
+    inFlightCache.delete(key)
+  }
 }
 
 // Debounce utility for scroll handlers
@@ -114,7 +135,14 @@ const useDebounce = <T extends (...args: any[]) => void>(fn: T, delay: number) =
   }, [fn, delay])
 }
 
-export function FunctionalSidebar({ onContentSelect, selectedContentId, initialSemesterId }: FunctionalSidebarProps) {
+export function FunctionalSidebar({
+  onContentSelect,
+  selectedContentId,
+  selectedContentType,
+  selectedCourseId,
+  selectedTopicId,
+  initialSemesterId,
+}: FunctionalSidebarProps) {
   const [semesters, setSemesters] = useState<Semester[]>([])
   const [selectedSemester, setSelectedSemester] = useState("")
   const [courses, setCourses] = useState<Course[]>([])
@@ -129,9 +157,21 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
 
   // Course data cache with loading states - using Map for O(1) lookups
   const [courseData, setCourseData] = useState<Record<string, any>>({})
+  const courseDataRef = useRef<Record<string, any>>({})
+  const semesterRequestIdRef = useRef(0)
+  const coursesRequestIdRef = useRef(0)
+  const courseRequestTokenRef = useRef<Record<string, number>>({})
+  const topicRequestTokenRef = useRef<Record<string, number>>({})
+  const courseRequestsRef = useRef(new Map<string, Promise<any>>())
+  const topicRequestsRef = useRef(new Map<string, Promise<{ slides: Slide[]; videos: Video[] }>>())
+  const autoExpandRequestRef = useRef(0)
 
   // Track if we've tried to auto-expand for current content
   const hasAutoExpandedRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    courseDataRef.current = courseData
+  }, [courseData])
   
   // Scroll container ref for optimized scroll handling
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -178,112 +218,133 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
     if (!selectedContentId || courses.length === 0) return
     if (hasAutoExpandedRef.current === selectedContentId) return
 
-    let timeoutId: NodeJS.Timeout
     let isCancelled = false
+    const requestId = ++autoExpandRequestRef.current
+    const isStale = () => isCancelled || autoExpandRequestRef.current !== requestId
+
+    const scrollToSelectedContent = () => {
+      requestAnimationFrame(() => {
+        const el = document.querySelector(`[data-content-id="${selectedContentId}"]`)
+        el?.scrollIntoView({ behavior: "auto", block: "nearest" })
+      })
+    }
+
+    const finalizeExpansion = (courseId: string, topicId?: string) => {
+      if (isStale()) return
+
+      setExpandedCourses(new Set([courseId]))
+
+      if (selectedContentType === "study-tool" || selectedContentType === "syllabus") {
+        setExpandedStudyTools(new Set([courseId]))
+        setExpandedTopics(new Set())
+        setExpandedTopicItems(new Set())
+      } else if (topicId) {
+        setExpandedStudyTools(new Set())
+        setExpandedTopics(new Set([courseId]))
+        setExpandedTopicItems(new Set([topicId]))
+      }
+
+      hasAutoExpandedRef.current = selectedContentId
+      scrollToSelectedContent()
+    }
+
+    const tryExpandKnownPath = async () => {
+      if (!selectedCourseId) return false
+
+      const targetCourse = courses.find((course) => course.id === selectedCourseId)
+      if (!targetCourse) return false
+
+      const data = await fetchCourseData(selectedCourseId)
+      if (isStale() || !data) return true
+
+      if (selectedContentType === "study-tool" || selectedContentType === "syllabus") {
+        finalizeExpansion(selectedCourseId)
+        return true
+      }
+
+      // If topic id is known from URL or click state, only load that topic branch.
+      if (selectedTopicId) {
+        await fetchTopicContent(selectedCourseId, selectedTopicId)
+        if (isStale()) return true
+        finalizeExpansion(selectedCourseId, selectedTopicId)
+        return true
+      }
+
+      // Fallback inside the known course: inspect only its topics.
+      for (const topic of data.topics || []) {
+        const topicContent = await fetchTopicContent(selectedCourseId, topic.id)
+        if (isStale()) return true
+
+        if (
+          topicContent.videos.some((video) => video.id === selectedContentId) ||
+          topicContent.slides.some((slide) => slide.id === selectedContentId)
+        ) {
+          finalizeExpansion(selectedCourseId, topic.id)
+          return true
+        }
+      }
+
+      finalizeExpansion(selectedCourseId)
+      return true
+    }
+
+    const fallbackSearchExpansion = async () => {
+      // Progressive fallback for legacy states where course/topic IDs are unavailable.
+      for (const course of courses) {
+        const courseId = course.id
+        const data = await fetchCourseData(courseId)
+
+        if (isStale() || !data) return
+
+        if (data.studyTools?.some((tool: StudyTool) => tool.id === selectedContentId)) {
+          finalizeExpansion(courseId)
+          return
+        }
+
+        for (const topic of data.topics || []) {
+          let topicSlides = data.slides?.[topic.id] || []
+          let topicVideos = data.videos?.[topic.id] || []
+
+          if (topicSlides.length === 0 && topicVideos.length === 0) {
+            const topicContent = await fetchTopicContent(courseId, topic.id)
+            if (isStale()) return
+            topicSlides = topicContent.slides
+            topicVideos = topicContent.videos
+          }
+
+          if (
+            topicVideos.some((video: Video) => video.id === selectedContentId) ||
+            topicSlides.some((slide: Slide) => slide.id === selectedContentId)
+          ) {
+            finalizeExpansion(courseId, topic.id)
+            return
+          }
+        }
+      }
+    }
 
     const expandSidebarForSelectedContent = async () => {
       try {
-        // Load all course data in parallel
-        await Promise.all(
-          courses.map(async (course) => {
-            const courseId = (course as any).id
-            if (!courseData[courseId] || courseData[courseId].isLoading) {
-              await fetchCourseData(courseId)
-            }
-          })
-        )
+        const expandedByKnownPath = await tryExpandKnownPath()
+        if (isStale() || expandedByKnownPath) return
 
-        if (isCancelled) return
-
-        // Brief wait for state to settle
-        await new Promise(resolve => setTimeout(resolve, 100))
-
-        if (isCancelled) return
-
-        // Search for content and expand
-        for (const course of courses) {
-          const courseId = (course as any).id
-          const data = courseData[courseId]
-          
-          if (!data || data.isLoading) continue
-
-          // Check study tools
-          if (data.studyTools?.some((tool: any) => tool.id === selectedContentId)) {
-            setExpandedCourses(new Set([courseId]))
-            setExpandedStudyTools(new Set([courseId]))
-            hasAutoExpandedRef.current = selectedContentId
-            
-            requestAnimationFrame(() => {
-              const el = document.querySelector(`[data-content-id="${selectedContentId}"]`)
-              el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            })
-            return
-          }
-
-          // Check topics for videos/slides
-          for (const topic of data.topics || []) {
-            const videos = data.videos?.[topic.id] || []
-            const slides = data.slides?.[topic.id] || []
-            
-            // Load topic content if needed
-            if (videos.length === 0 && slides.length === 0) {
-              await fetchTopicContent(courseId, topic.id)
-              await new Promise(resolve => setTimeout(resolve, 50))
-              
-              if (isCancelled) return
-              
-              const freshData = courseData[courseId]
-              const freshVideos = freshData?.videos?.[topic.id] || []
-              const freshSlides = freshData?.slides?.[topic.id] || []
-              
-              if (freshVideos.some((v: any) => v.id === selectedContentId) ||
-                  freshSlides.some((s: any) => s.id === selectedContentId)) {
-                setExpandedCourses(new Set([courseId]))
-                setExpandedTopics(new Set([courseId]))
-                setExpandedTopicItems(new Set([topic.id]))
-                hasAutoExpandedRef.current = selectedContentId
-                
-                requestAnimationFrame(() => {
-                  const el = document.querySelector(`[data-content-id="${selectedContentId}"]`)
-                  el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                })
-                return
-              }
-            } else {
-              // Check loaded content
-              if (videos.some((v: any) => v.id === selectedContentId) ||
-                  slides.some((s: any) => s.id === selectedContentId)) {
-                setExpandedCourses(new Set([courseId]))
-                setExpandedTopics(new Set([courseId]))
-                setExpandedTopicItems(new Set([topic.id]))
-                hasAutoExpandedRef.current = selectedContentId
-                
-                requestAnimationFrame(() => {
-                  const el = document.querySelector(`[data-content-id="${selectedContentId}"]`)
-                  el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                })
-                return
-              }
-            }
-          }
-        }
+        await fallbackSearchExpansion()
       } catch (error) {
         console.error('Error expanding sidebar:', error)
       }
     }
 
-    timeoutId = setTimeout(() => {
-      expandSidebarForSelectedContent()
-    }, 50)
+    void expandSidebarForSelectedContent()
 
     return () => {
       isCancelled = true
-      clearTimeout(timeoutId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedContentId, courses, courseData])
+  }, [selectedContentId, selectedContentType, selectedCourseId, selectedTopicId, courses])
 
   const fetchSemesters = async () => {
+    const requestId = ++semesterRequestIdRef.current
+
     try {
       setIsLoading(true)
       setError(null)
@@ -293,6 +354,8 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
         if (error) throw error
         return data || []
       })
+
+      if (requestId !== semesterRequestIdRef.current) return
 
       setSemesters(data)
 
@@ -324,26 +387,71 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
       console.error("Error fetching semesters:", err)
       setError("Failed to load semesters")
     } finally {
-      setIsLoading(false)
+      if (requestId === semesterRequestIdRef.current) {
+        setIsLoading(false)
+      }
     }
   }
 
   const fetchCourses = async (semesterId: string) => {
+    const requestId = ++coursesRequestIdRef.current
+
     try {
       setError(null)
 
-      const data = await getCachedData(`courses-${semesterId}`, async () => {
+      const data = await getCachedData(`courses-bundle-${semesterId}`, async () => {
         const { data, error } = await supabase
           .from("courses")
-          .select("*")
+          .select(`
+            *,
+            topics:topics(
+              id,
+              title,
+              order_index,
+              course_id
+            ),
+            studyTools:study_tools(
+              id,
+              title,
+              type,
+              content_url,
+              description,
+              course_id
+            )
+          `)
           .eq("semester_id", semesterId)
           .order("is_highlighted", { ascending: false }) // Highlighted courses first
           .order("created_at", { ascending: true })
         if (error) throw error
-        return data || []
+
+        return (data || []).map((course: any) => ({
+          ...course,
+          topics: [...(course.topics || [])].sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0)),
+          studyTools: course.studyTools || [],
+        }))
       })
 
-      setCourses(data)
+      if (requestId !== coursesRequestIdRef.current) return
+
+      setCourses(data.map(({ topics, studyTools, ...course }: any) => course as Course))
+
+      // Prime sidebar metadata to avoid per-course metadata refetches.
+      setCourseData((prev) => {
+        const next = { ...prev }
+
+        for (const course of data as any[]) {
+          const existing = prev[course.id]
+          next[course.id] = {
+            topics: course.topics || existing?.topics || [],
+            studyTools: course.studyTools || existing?.studyTools || [],
+            slides: existing?.slides || {},
+            videos: existing?.videos || {},
+            isLoading: false,
+          }
+        }
+
+        return next
+      })
     } catch (err) {
       console.error("Error fetching courses:", err)
       setError("Failed to load courses")
@@ -351,69 +459,110 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
   }
 
   const fetchCourseData = useCallback(async (courseId: string) => {
-    if (courseData[courseId] && !courseData[courseId].isLoading) return
+    const existingData = courseDataRef.current[courseId]
+    if (existingData && !existingData.isLoading) {
+      return existingData
+    }
 
-    // Set loading state
+    const inFlight = courseRequestsRef.current.get(courseId)
+    if (inFlight) {
+      return inFlight
+    }
+
     setCourseData((prev) => ({
       ...prev,
       [courseId]: {
-        topics: [],
-        studyTools: [],
-        slides: {},
-        videos: {},
+        topics: prev[courseId]?.topics || [],
+        studyTools: prev[courseId]?.studyTools || [],
+        slides: prev[courseId]?.slides || {},
+        videos: prev[courseId]?.videos || {},
         isLoading: true,
       },
     }))
 
-    try {
-      // Use optimized single query to fetch all course data
-      const data = await getCachedData(`course-data-${courseId}`, async () => {
-        // Fetch only topics first (most important data)
-        const topicsResult = await supabase
-          .from("topics")
-          .select("id, title, order_index, course_id")
-          .eq("course_id", courseId)
-          .order("order_index", { ascending: true })
+    const requestToken = (courseRequestTokenRef.current[courseId] || 0) + 1
+    courseRequestTokenRef.current[courseId] = requestToken
 
-        if (topicsResult.error) throw topicsResult.error
+    const requestPromise = (async () => {
+      try {
+        // Fetch topics and study tools in one query via nested relations.
+        const data = await getCachedData(`course-data-${courseId}`, async () => {
+          const { data, error } = await supabase
+            .from("courses")
+            .select(`
+              id,
+              topics:topics(
+                id,
+                title,
+                order_index,
+                course_id
+              ),
+              studyTools:study_tools(
+                id,
+                title,
+                type,
+                content_url,
+                description,
+                course_id
+              )
+            `)
+            .eq("id", courseId)
+            .single()
 
-        // Fetch study tools in parallel (less priority)
-        const studyToolsPromise = supabase
-          .from("study_tools")
-          .select("id, title, type, content_url, description, course_id")
-          .eq("course_id", courseId)
+          if (error) throw error
 
-        const studyToolsResult = await studyToolsPromise
+          return {
+            topics: [...(data?.topics || [])].sort((a, b) => (a.order_index || 0) - (b.order_index || 0)),
+            studyTools: data?.studyTools || [],
+            slides: {},
+            videos: {},
+          }
+        })
 
-        return {
-          topics: topicsResult.data || [],
-          studyTools: studyToolsResult.data || [],
-          slides: {},
-          videos: {},
-        }
-      })
-
-      setCourseData((prev) => ({
-        ...prev,
-        [courseId]: {
-          ...data,
+        const existing = courseDataRef.current[courseId]
+        const mergedData = {
+          topics: data.topics || [],
+          studyTools: data.studyTools || [],
+          slides: existing?.slides || {},
+          videos: existing?.videos || {},
           isLoading: false,
-        },
-      }))
-    } catch (err) {
-      console.error("Error fetching course data:", err)
-      setCourseData((prev) => ({
-        ...prev,
-        [courseId]: {
+        }
+
+        if (courseRequestTokenRef.current[courseId] === requestToken) {
+          setCourseData((prev) => ({
+            ...prev,
+            [courseId]: mergedData,
+          }))
+        }
+
+        return mergedData
+      } catch (err) {
+        console.error("Error fetching course data:", err)
+
+        const fallbackData = {
           topics: [],
           studyTools: [],
-          slides: {},
-          videos: {},
+          slides: courseDataRef.current[courseId]?.slides || {},
+          videos: courseDataRef.current[courseId]?.videos || {},
           isLoading: false,
-        },
-      }))
-    }
-  }, [courseData])
+        }
+
+        if (courseRequestTokenRef.current[courseId] === requestToken) {
+          setCourseData((prev) => ({
+            ...prev,
+            [courseId]: fallbackData,
+          }))
+        }
+
+        return fallbackData
+      } finally {
+        courseRequestsRef.current.delete(courseId)
+      }
+    })()
+
+    courseRequestsRef.current.set(courseId, requestPromise)
+    return requestPromise
+  }, [])
 
   // Optimized toggle functions with batched state updates
   const toggleCourse = useCallback((courseId: string) => {
@@ -431,12 +580,9 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
           // Batch reset and expand new - auto-expand Topics section for better UX
           setExpandedTopicItems(new Set())
           setExpandedStudyTools(new Set())
-          // Auto-expand Topics section smoothly after a brief delay for animation
-          requestAnimationFrame(() => {
-            setExpandedTopics(new Set([courseId]))
-          })
+          setExpandedTopics(new Set([courseId]))
           // Fetch data asynchronously
-          queueMicrotask(() => fetchCourseData(courseId))
+          void fetchCourseData(courseId)
           return new Set([courseId])
         }
       })
@@ -473,49 +619,82 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
 
   // Lazy load topic content (slides and videos) only when expanded
   const fetchTopicContent = useCallback(async (courseId: string, topicId: string) => {
-    const currentCourseData = courseData[courseId]
-    if (!currentCourseData || currentCourseData.slides[topicId] || currentCourseData.videos[topicId]) return
-
-    try {
-      const cacheKey = `topic-content-${topicId}`
-      const data = await getCachedData(cacheKey, async () => {
-        const [slidesResult, videosResult] = await Promise.all([
-          supabase
-            .from("slides")
-            .select("id, title, google_drive_url, order_index, topic_id")
-            .eq("topic_id", topicId)
-            .order("order_index", { ascending: true }),
-          supabase
-            .from("videos")
-            .select("id, title, youtube_url, order_index, topic_id")
-            .eq("topic_id", topicId)
-            .order("order_index", { ascending: true }),
-        ])
-
-        return {
-          slides: slidesResult.data || [],
-          videos: videosResult.data || [],
-        }
-      })
-
-      setCourseData((prev) => ({
-        ...prev,
-        [courseId]: {
-          ...prev[courseId],
-          slides: {
-            ...prev[courseId].slides,
-            [topicId]: data.slides,
-          },
-          videos: {
-            ...prev[courseId].videos,
-            [topicId]: data.videos,
-          },
-        },
-      }))
-    } catch (err) {
-      console.error("Error fetching topic content:", err)
+    const currentCourseData = courseDataRef.current[courseId]
+    if (!currentCourseData) {
+      return { slides: [], videos: [] }
     }
-  }, [courseData])
+
+    if (currentCourseData.slides[topicId] && currentCourseData.videos[topicId]) {
+      return {
+        slides: currentCourseData.slides[topicId] || [],
+        videos: currentCourseData.videos[topicId] || [],
+      }
+    }
+
+    const requestKey = `${courseId}:${topicId}`
+    const inFlight = topicRequestsRef.current.get(requestKey)
+    if (inFlight) {
+      return inFlight
+    }
+
+    const requestToken = (topicRequestTokenRef.current[requestKey] || 0) + 1
+    topicRequestTokenRef.current[requestKey] = requestToken
+
+    const requestPromise = (async () => {
+      try {
+        const cacheKey = `topic-content-${topicId}`
+        const data = await getCachedData(cacheKey, async () => {
+          const [slidesResult, videosResult] = await Promise.all([
+            supabase
+              .from("slides")
+              .select("id, title, google_drive_url, order_index, topic_id")
+              .eq("topic_id", topicId)
+              .order("order_index", { ascending: true }),
+            supabase
+              .from("videos")
+              .select("id, title, youtube_url, order_index, topic_id")
+              .eq("topic_id", topicId)
+              .order("order_index", { ascending: true }),
+          ])
+
+          if (slidesResult.error) throw slidesResult.error
+          if (videosResult.error) throw videosResult.error
+
+          return {
+            slides: slidesResult.data || [],
+            videos: videosResult.data || [],
+          }
+        })
+
+        if (topicRequestTokenRef.current[requestKey] === requestToken) {
+          setCourseData((prev) => ({
+            ...prev,
+            [courseId]: {
+              ...prev[courseId],
+              slides: {
+                ...prev[courseId].slides,
+                [topicId]: data.slides,
+              },
+              videos: {
+                ...prev[courseId].videos,
+                [topicId]: data.videos,
+              },
+            },
+          }))
+        }
+
+        return data
+      } catch (err) {
+        console.error("Error fetching topic content:", err)
+        return { slides: [], videos: [] }
+      } finally {
+        topicRequestsRef.current.delete(requestKey)
+      }
+    })()
+
+    topicRequestsRef.current.set(requestKey, requestPromise)
+    return requestPromise
+  }, [])
 
   const toggleTopicItem = useCallback((topicId: string, courseId: string) => {
     startTransition(() => {
@@ -527,7 +706,7 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
           newSet.delete(topicId)
         } else {
           // Close all other topics in the same course before opening this one
-          const currentCourseData = courseData[courseId]
+          const currentCourseData = courseDataRef.current[courseId]
           if (currentCourseData?.topics) {
             currentCourseData.topics.forEach((topic: Topic) => {
               if (topic.id !== topicId) {
@@ -539,12 +718,12 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
           // Now add the new topic
           newSet.add(topicId)
           // Lazy load content when expanding
-          queueMicrotask(() => fetchTopicContent(courseId, topicId))
+          void fetchTopicContent(courseId, topicId)
         }
         return newSet
       })
     })
-  }, [fetchTopicContent, courseData])
+  }, [fetchTopicContent])
 
   // Optimized content selection handler with memoization
   const handleContentClick = useCallback(
@@ -558,6 +737,8 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
       description?: string,
       courseCode?: string,
       semesterInfo?: { id: string; title: string; section: string; is_active: boolean },
+      courseId?: string,
+      topicId?: string,
     ) => {
       onContentSelect({
         type,
@@ -569,6 +750,8 @@ export function FunctionalSidebar({ onContentSelect, selectedContentId, initialS
         description,
         courseCode,
         semesterInfo,
+        courseId,
+        topicId,
       })
     },
     [onContentSelect],
@@ -855,6 +1038,8 @@ interface CourseItemProps {
     description?: string,
     courseCode?: string,
     semesterInfo?: { id: string; title: string; section: string; is_active: boolean },
+    courseId?: string,
+    topicId?: string,
   ) => void
   getStudyToolIcon: (type: string) => React.ReactNode
   getStudyToolLabel: (type: string) => string
@@ -1074,7 +1259,7 @@ interface StudyToolsSectionProps {
   studyTools: StudyTool[]
   isExpanded: boolean
   onToggle: (courseId: string) => void
-  onContentClick: (type: any, title: string, url: string, id: string, topicTitle?: string, courseTitle?: string, description?: string, courseCode?: string, semesterInfo?: any) => void
+  onContentClick: (type: any, title: string, url: string, id: string, topicTitle?: string, courseTitle?: string, description?: string, courseCode?: string, semesterInfo?: any, courseId?: string, topicId?: string) => void
   getStudyToolIcon: (type: string) => React.ReactNode
   selectedContentId?: string
   isMobile?: boolean
@@ -1119,6 +1304,7 @@ const StudyToolsSection = memo<StudyToolsSectionProps>(({
             <StudyToolItem
               key={tool.id}
               tool={tool}
+              courseId={courseId}
               courseTitle={courseTitle}
               courseCode={courseCode}
               isSelected={selectedContentId === tool.id}
@@ -1138,16 +1324,18 @@ StudyToolsSection.displayName = "StudyToolsSection"
 // Memoized Study Tool Item
 interface StudyToolItemProps {
   tool: StudyTool
+  courseId: string
   courseTitle: string
   courseCode: string
   isSelected: boolean
-  onContentClick: (type: any, title: string, url: string, id: string, topicTitle?: string, courseTitle?: string, description?: string, courseCode?: string, semesterInfo?: any) => void
+  onContentClick: (type: any, title: string, url: string, id: string, topicTitle?: string, courseTitle?: string, description?: string, courseCode?: string, semesterInfo?: any, courseId?: string, topicId?: string) => void
   getStudyToolIcon: (type: string) => React.ReactNode
   semesterInfo?: any
 }
 
 const StudyToolItem = memo<StudyToolItemProps>(({
   tool,
+  courseId,
   courseTitle,
   courseCode,
   isSelected,
@@ -1157,14 +1345,14 @@ const StudyToolItem = memo<StudyToolItemProps>(({
 }) => {
   const handleClick = useCallback(() => {
     if (tool.type === "syllabus") {
-      onContentClick("syllabus", tool.title, `#syllabus-${tool.id}`, tool.id, undefined, courseTitle, tool.description || '', courseCode, semesterInfo)
+      onContentClick("syllabus", tool.title, `#syllabus-${tool.id}`, tool.id, undefined, courseTitle, tool.description || '', courseCode, semesterInfo, courseId)
     } else if (tool.content_url) {
-      onContentClick("study-tool", tool.title, tool.content_url, tool.id, undefined, courseTitle, tool.description || '', courseCode, semesterInfo)
+      onContentClick("study-tool", tool.title, tool.content_url, tool.id, undefined, courseTitle, tool.description || '', courseCode, semesterInfo, courseId)
     } else if (tool.description) {
       // For tools like mark_distribution that have description but no content_url
-      onContentClick("study-tool", tool.title, `#study-tool-${tool.id}`, tool.id, undefined, courseTitle, tool.description, courseCode, semesterInfo)
+      onContentClick("study-tool", tool.title, `#study-tool-${tool.id}`, tool.id, undefined, courseTitle, tool.description, courseCode, semesterInfo, courseId)
     }
-  }, [tool, courseTitle, courseCode, onContentClick, semesterInfo])
+  }, [tool, courseId, courseTitle, courseCode, onContentClick, semesterInfo])
 
   return (
     <Button
@@ -1200,7 +1388,7 @@ interface TopicsSectionProps {
   expandedTopicItems: Set<string>
   onToggle: (courseId: string) => void
   onToggleTopicItem: (topicId: string, courseId: string) => void
-  onContentClick: (type: any, title: string, url: string, id: string, topicTitle?: string, courseTitle?: string, description?: string, courseCode?: string, semesterInfo?: any) => void
+  onContentClick: (type: any, title: string, url: string, id: string, topicTitle?: string, courseTitle?: string, description?: string, courseCode?: string, semesterInfo?: any, courseId?: string, topicId?: string) => void
   selectedContentId?: string
   isMobile?: boolean
   semesterInfo?: any
@@ -1280,7 +1468,7 @@ interface TopicItemProps {
   videos: Video[]
   isExpanded: boolean
   onToggle: (topicId: string, courseId: string) => void
-  onContentClick: (type: any, title: string, url: string, id: string, topicTitle?: string, courseTitle?: string, description?: string, courseCode?: string, semesterInfo?: any) => void
+  onContentClick: (type: any, title: string, url: string, id: string, topicTitle?: string, courseTitle?: string, description?: string, courseCode?: string, semesterInfo?: any, courseId?: string, topicId?: string) => void
   selectedContentId?: string
   isMobile?: boolean
   semesterInfo?: any
@@ -1346,6 +1534,8 @@ const TopicItem = memo<TopicItemProps>(({
               id={video.id}
               title={video.title}
               url={video.youtube_url}
+              courseId={courseId}
+              topicId={topic.id}
               topicTitle={topic.title}
               courseTitle={courseTitle}
               courseCode={courseCode}
@@ -1362,6 +1552,8 @@ const TopicItem = memo<TopicItemProps>(({
               id={slide.id}
               title={slide.title}
               url={slide.google_drive_url}
+              courseId={courseId}
+              topicId={topic.id}
               topicTitle={topic.title}
               courseTitle={courseTitle}
               courseCode={courseCode}
@@ -1391,11 +1583,13 @@ interface ContentItemButtonProps {
   id: string
   title: string
   url: string
+  courseId: string
+  topicId: string
   topicTitle: string
   courseTitle: string
   courseCode: string
   isSelected: boolean
-  onContentClick: (type: any, title: string, url: string, id: string, topicTitle?: string, courseTitle?: string, description?: string, courseCode?: string, semesterInfo?: any) => void
+  onContentClick: (type: any, title: string, url: string, id: string, topicTitle?: string, courseTitle?: string, description?: string, courseCode?: string, semesterInfo?: any, courseId?: string, topicId?: string) => void
   isMobile?: boolean
   semesterInfo?: any
 }
@@ -1405,6 +1599,8 @@ const ContentItemButton = memo<ContentItemButtonProps>(({
   id,
   title,
   url,
+  courseId,
+  topicId,
   topicTitle,
   courseTitle,
   courseCode,
@@ -1414,8 +1610,8 @@ const ContentItemButton = memo<ContentItemButtonProps>(({
   semesterInfo,
 }) => {
   const handleClick = useCallback(() => {
-    onContentClick(type, title, url, id, topicTitle, courseTitle, undefined, courseCode, semesterInfo)
-  }, [type, title, url, id, topicTitle, courseTitle, courseCode, onContentClick, semesterInfo])
+    onContentClick(type, title, url, id, topicTitle, courseTitle, undefined, courseCode, semesterInfo, courseId, topicId)
+  }, [type, title, url, id, topicTitle, courseTitle, courseCode, onContentClick, semesterInfo, courseId, topicId])
 
   const isVideo = type === "video"
 

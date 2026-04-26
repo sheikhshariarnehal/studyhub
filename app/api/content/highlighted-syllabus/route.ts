@@ -57,6 +57,7 @@ export async function GET() {
         title: syllabusData.title,
         url: `#syllabus-${syllabusData.id}`,
         id: syllabusData.id,
+        courseId: course.id,
         courseTitle: course.title,
         description: syllabusData.description,
         courseCode: course.course_code,
@@ -81,6 +82,7 @@ export async function GET() {
         title: studyTool.title,
         url: studyTool.type === "syllabus" ? `#syllabus-${studyTool.id}` : studyTool.content_url || `#study-tool-${studyTool.id}`,
         id: studyTool.id,
+        courseId: course.id,
         courseTitle: course.title,
         description: studyTool.description,
         courseCode: course.course_code,
@@ -96,6 +98,7 @@ export async function GET() {
       .select(`
         *,
         topics!inner (
+          id,
           title,
           course_id
         )
@@ -111,6 +114,8 @@ export async function GET() {
         title: slide.title,
         url: slide.google_drive_url,
         id: slide.id,
+        courseId: course.id,
+        topicId: slide.topics?.id,
         topicTitle: slide.topics?.title,
         courseTitle: course.title,
         courseCode: course.course_code,
@@ -126,6 +131,7 @@ export async function GET() {
       .select(`
         *,
         topics!inner (
+          id,
           title,
           course_id
         )
@@ -141,6 +147,8 @@ export async function GET() {
         title: video.title,
         url: video.youtube_url,
         id: video.id,
+        courseId: course.id,
+        topicId: video.topics?.id,
         topicTitle: video.topics?.title,
         courseTitle: course.title,
         courseCode: course.course_code,
