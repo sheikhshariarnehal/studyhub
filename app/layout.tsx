@@ -91,9 +91,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head suppressHydrationWarning>
-        {/* Keep head lean; preconnect hints should be route-specific when needed. */}
+        {/* YouTube Preconnect Hints for Lite Embed Performance */}
+        <link rel="preconnect" href="https://www.youtube.com" />
+        <link rel="preconnect" href="https://www.google.com" />
+        <link rel="preconnect" href="https://i.ytimg.com" />
 
-  {/* App icons and manifest */}
+        {/* App icons and manifest */}
   <link rel="icon" href="/images/favicon2.webp" type="image/webp" />
   <link rel="apple-touch-icon" href="/images/favicon2.webp" />
         <link rel="manifest" href="/manifest.json" />

@@ -64,6 +64,7 @@
     "react-day-picker": "latest",
     "react-dom": "^19.2.3",
     "react-hook-form": "latest",
+    "react-lite-youtube-embed": "^3.5.1",
     "react-resizable-panels": "latest",
     "recharts": "latest",
     "sonner": "latest",

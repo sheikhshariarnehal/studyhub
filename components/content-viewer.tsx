@@ -10,6 +10,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useIsMobile } from "@/components/ui/use-mobile"
+import LiteYouTubeEmbed from 'react-lite-youtube-embed'
+import 'react-lite-youtube-embed/dist/LiteYouTubeEmbed.css'
 
 interface ContentItem {
   type: "slide" | "video" | "document" | "syllabus" | "study-tool"
@@ -48,8 +50,8 @@ export const ContentViewer = memo(function ContentViewer({ content, isLoading = 
 
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const viewTimeRef = useRef<NodeJS.Timeout>()
-  const controlsTimeoutRef = useRef<NodeJS.Timeout>()
+  const viewTimeRef = useRef<NodeJS.Timeout | undefined>(undefined)
+  const controlsTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
 
   const isMobile = useIsMobile()
 
@@ -65,6 +67,23 @@ export const ContentViewer = memo(function ContentViewer({ content, isLoading = 
     if (isDescriptionOnly) return ""
     return content.url
   }, [content.url, isDescriptionOnly])
+
+  const videoId = useMemo(() => {
+    if (content.type !== "video" || !content.url) return null;
+    let id = "";
+    const url = content.url;
+    if (url.includes("youtube.com/watch?v=")) {
+      id = url.split("v=")[1]?.split("&")[0];
+    } else if (url.includes("youtu.be/")) {
+      id = url.split("youtu.be/")[1]?.split("?")[0];
+    } else if (url.includes("youtube.com/embed/")) {
+      const baseUrl = url.split("?")[0];
+      id = baseUrl.split("embed/")[1];
+    } else if (url.includes("youtube.com/v/")) {
+      id = url.split("v/")[1]?.split("?")[0];
+    }
+    return id;
+  }, [content.url, content.type]);
 
   const iframeStyle = useMemo(() => ({
     transform: `scale(${zoomLevel / 100}) rotate(${isRotated}deg)`,
@@ -83,8 +102,8 @@ export const ContentViewer = memo(function ContentViewer({ content, isLoading = 
   }, [isFullscreen, isMobile])
 
   useEffect(() => {
-    // Don't show loading for description-only content since it doesn't use iframe
-    if (!isDescriptionOnly) {
+    // Don't show loading for description-only content or videos (Lite embed is instant)
+    if (!isDescriptionOnly && content.type !== "video") {
       setIframeLoading(true)
     } else {
       setIframeLoading(false)
@@ -928,6 +947,17 @@ export const ContentViewer = memo(function ContentViewer({ content, isLoading = 
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        ) : content.type === "video" && videoId ? (
+          <div className={`w-full h-full bg-black ${isMobile ? 'touch-manipulation' : ''} flex items-center justify-center`}>
+            <div className="w-full h-full max-h-full">
+              <LiteYouTubeEmbed
+                id={videoId}
+                title={content.title}
+                wrapperClass="yt-lite w-full h-full"
+                playerClass="lty-playbtn"
+              />
             </div>
           </div>
         ) : content.type === "video" ? (
