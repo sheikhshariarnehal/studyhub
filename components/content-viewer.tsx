@@ -426,14 +426,14 @@ export const ContentViewer = memo(function ContentViewer({ content, isLoading = 
         // disablekb=0: Enable keyboard controls
         // iv_load_policy=3: Disable video annotations
         // enablejsapi=1: Enable JavaScript API for control
-        return `https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${typeof window !== "undefined" ? window.location.origin : ""}&rel=0&modestbranding=1&fs=1&disablekb=0&iv_load_policy=3`
+        return `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1&origin=${typeof window !== "undefined" ? window.location.origin : ""}&rel=0&modestbranding=1&fs=1&disablekb=0&iv_load_policy=3`
       }
 
       // If it's already an embed URL, ensure it has proper parameters
       if (url.includes("youtube.com/embed/")) {
         const baseUrl = url.split("?")[0]
         const videoIdMatch = baseUrl.split("embed/")[1]
-        return `https://www.youtube.com/embed/${videoIdMatch}?enablejsapi=1&origin=${typeof window !== "undefined" ? window.location.origin : ""}&rel=0&modestbranding=1&fs=1&disablekb=0&iv_load_policy=3`
+        return `https://www.youtube.com/embed/${videoIdMatch}?autoplay=1&enablejsapi=1&origin=${typeof window !== "undefined" ? window.location.origin : ""}&rel=0&modestbranding=1&fs=1&disablekb=0&iv_load_policy=3`
       }
     } else if (type === "slide" || type === "document" || type === "study-tool") {
       // Handle Google Drive URLs for documents, slides, and study tools
@@ -934,20 +934,6 @@ export const ContentViewer = memo(function ContentViewer({ content, isLoading = 
                   </div>
                 )}
               </div>
-            </div>
-          </div>
-        ) : content.type === "video" && videoId ? (
-          <div className={`w-full h-full bg-black ${isMobile ? 'touch-manipulation' : ''} flex items-center justify-center`}>
-            <div className="w-full h-full max-h-full">
-              <LiteYouTubeEmbed
-                id={videoId}
-                title={content.title}
-                wrapperClass="yt-lite w-full h-full"
-                playerClass="lty-playbtn"
-                params="autoplay=1&rel=0&modestbranding=1"
-                alwaysLoadIframe={true}
-                autoplay={true}
-              />
             </div>
           </div>
         ) : content.type === "video" ? (
