@@ -588,7 +588,7 @@ export default function HomePage() {
                     {/* Logo */}
                     <div className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 mx-auto mb-6 transform hover:scale-105 transition-transform duration-300">
                       <img 
-                        src="/images/favicon2.webp" 
+                        src="/images/Logo.webp" 
                         alt="StudyHub DIU Logo" 
                         className="w-full h-full object-contain rounded-xl" 
                       />

@@ -86,7 +86,7 @@ export function Header({ className }: HeaderProps) {
             >
               {/* Logo Icon */}
               <img
-                src="/images/favicon2.webp"
+                src="/images/Logo.webp"
                 alt="StudyHub DIU"
                 className="w-8 h-8 sm:w-10 sm:h-10 object-contain rounded-md"
               />
