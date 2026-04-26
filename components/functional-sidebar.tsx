@@ -1527,7 +1527,7 @@ const TopicItem = memo<TopicItemProps>(({
 
       {isExpanded && (
         <div className={`${isMobile ? 'ml-5' : 'ml-6'} space-y-0.5 mt-0.5 mb-0.5 min-w-0 border-l-2 border-border/30 pl-2 animate-slideDown`}>
-          {videos.map((video) => (
+          {videos.map((video: Video) => (
             <ContentItemButton
               key={video.id}
               type="video"
@@ -1545,7 +1545,7 @@ const TopicItem = memo<TopicItemProps>(({
               semesterInfo={semesterInfo}
             />
           ))}
-          {slides.map((slide) => (
+          {slides.map((slide: Slide) => (
             <ContentItemButton
               key={slide.id}
               type="slide"

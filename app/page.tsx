@@ -586,8 +586,12 @@ export default function HomePage() {
                 <div className="flex items-center justify-center h-full p-4 sm:p-6 lg:p-8">
                   <div className="text-center max-w-sm sm:max-w-md lg:max-w-lg animate-slide-up">
                     {/* Logo */}
-                    <div className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-primary-lg transform hover:scale-105 transition-transform duration-300 overflow-hidden">
-                      <img src="/images/favicon2.webp" alt="StudyHub DIU Logo" className="w-full h-full object-cover" />
+                    <div className="w-16 h-16 sm:w-20 sm:h-20 lg:w-24 lg:h-24 mx-auto mb-6 transform hover:scale-105 transition-transform duration-300">
+                      <img 
+                        src="/images/favicon2.webp" 
+                        alt="StudyHub DIU Logo" 
+                        className="w-full h-full object-contain rounded-xl" 
+                      />
                     </div>
 
                     {/* Title */}
