@@ -944,6 +944,9 @@ export const ContentViewer = memo(function ContentViewer({ content, isLoading = 
                 title={content.title}
                 wrapperClass="yt-lite w-full h-full"
                 playerClass="lty-playbtn"
+                params="autoplay=1&rel=0&modestbranding=1"
+                alwaysLoadIframe={true}
+                autoplay={true}
               />
             </div>
           </div>
